@@ -1,0 +1,23 @@
+# 采集阶段依赖：后续按具体平台决定
+# requests
+# aiohttp
+# scrapy
+
+# 解析阶段依赖：后续按页面结构决定
+# beautifulsoup4
+# lxml
+
+# 数据分析依赖：后续按分析方案决定
+# pandas
+# numpy
+# jieba
+# snownlp
+
+# 可视化依赖：后续按展示需求决定
+# matplotlib
+# seaborn
+
+# 存储依赖：后续按落地方式决定
+# sqlalchemy
+# openpyxl
+
