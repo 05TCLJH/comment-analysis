@@ -12,7 +12,7 @@ env/
 .idea/
 .vscode/
 
-# 测试和工具缓存
+# 测试与工具缓存
 .pytest_cache/
 .mypy_cache/
 .coverage
@@ -22,3 +22,6 @@ htmlcov/
 *.log
 logs/
 
+# 本地运行产物
+data/processed/
+data/results/

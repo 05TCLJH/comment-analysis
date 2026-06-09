@@ -44,4 +44,3 @@ class Settings:
 
 # 全局配置实例，其他模块直接导入使用
 settings = Settings()
-

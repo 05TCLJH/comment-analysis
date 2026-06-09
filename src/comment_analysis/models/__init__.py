@@ -1,2 +1,5 @@
-"""数据模型模块：定义评论数据的统一结构，供各阶段复用。"""
+"""评论分析流程使用的数据模型入口。"""
 
+from .comment_record import CommentRecord
+
+__all__ = ["CommentRecord"]

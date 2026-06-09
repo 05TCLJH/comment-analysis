@@ -11,7 +11,7 @@ from comment_analysis.models.comment_record import CommentRecord
 class BaseCrawler(ABC):
     """所有平台爬虫都应该继承这个基类。"""
 
-    # 平台名称，由子类自己定义
+    # 平台名称，由子类自行定义
     platform_name: str = "base"
 
     @abstractmethod
@@ -20,5 +20,5 @@ class BaseCrawler(ABC):
         raise NotImplementedError
 
     def close(self) -> None:
-        """释放资源，子类可按需重写。"""
+        """释放资源，子类可以按需重写。"""
         return None

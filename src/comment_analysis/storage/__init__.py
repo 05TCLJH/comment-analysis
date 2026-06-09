@@ -1,2 +1,17 @@
-"""存储模块：负责将结构化数据保存到文件、数据库或其他介质。"""
+"""存储模块入口：负责把结构化数据保存到本地文件。"""
 
+from .repository import (
+    BaseRepository,
+    CsvFileRepository,
+    JsonFileRepository,
+    MemoryRepository,
+    build_local_repository,
+)
+
+__all__ = [
+    "BaseRepository",
+    "CsvFileRepository",
+    "JsonFileRepository",
+    "MemoryRepository",
+    "build_local_repository",
+]
