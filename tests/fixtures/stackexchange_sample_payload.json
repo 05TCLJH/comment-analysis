@@ -1,0 +1,72 @@
+{
+  "questions": {
+    "items": [
+      {
+        "tags": [
+          "united-states",
+          "israel",
+          "us-israel-iran-war"
+        ],
+        "owner": {
+          "display_name": "Italian Philosopher",
+          "user_id": 21531
+        },
+        "is_answered": true,
+        "view_count": 3529,
+        "accepted_answer_id": 94574,
+        "answer_count": 2,
+        "score": 11,
+        "last_activity_date": 1777429197,
+        "creation_date": 1776644861,
+        "last_edit_date": 1777429197,
+        "question_id": 94570,
+        "content_license": "CC BY-SA 4.0",
+        "link": "https://politics.stackexchange.com/questions/94570/what-facts-are-being-cited-for-or-against-claims-that-netanyahu-influenced-tru",
+        "title": "What facts are being cited for, or against, claims that Netanyahu influenced Trump to start the current war with Iran?"
+      }
+    ]
+  },
+  "comments": {
+    "items": [
+      {
+        "owner": {
+          "display_name": "Guran",
+          "user_id": 16225
+        },
+        "edited": false,
+        "score": 1,
+        "creation_date": 1776774356,
+        "post_id": 94570,
+        "comment_id": 434227,
+        "content_license": "CC BY-SA 4.0",
+        "body": "This question would be improved by a more distinct definition of &quot;influenced&quot;. It is a vast difference between &quot;I believed this to be in our countrys best interest anyway and this call from a trusted ally strenghtened me in the decision.&quot; and &quot;This might not be in our countrys best interest, but I did it as a personal favour to a foreign leader.&quot;"
+      },
+      {
+        "owner": {
+          "display_name": "AakashM",
+          "user_id": 11666
+        },
+        "edited": false,
+        "score": 1,
+        "creation_date": 1776772389,
+        "post_id": 94570,
+        "comment_id": 434226,
+        "content_license": "CC BY-SA 4.0",
+        "body": "I can&#39;t understand what the &#39;those&#39; in the very first sentence refers to?"
+      },
+      {
+        "owner": {
+          "display_name": "Ben Voigt",
+          "user_id": 2648
+        },
+        "edited": false,
+        "score": 0,
+        "creation_date": 1776766222,
+        "post_id": 94570,
+        "comment_id": 434191,
+        "content_license": "CC BY-SA 4.0",
+        "body": "More neutral and better clarity: &quot;see the influence of Israel&#39;s PM, Netanyahu, in Trump deciding to wage war&quot; -&gt; &quot;perceive that Israel&#39;s PM, Netanyahu, influenced Trump&#39;s decision to wage war&quot;.  &quot;Perceive&quot; expresses the opinion of the people without getting into factuality -- it is an opinion which was shaped mostly by mass media and few people bothered to look at actual facts.  (Note that I&#39;m not making any statement about whether the facts support this view either)"
+      }
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-"""分析入口：读取本地文件并输出关键词统计结果。"""
+"""分析入口：读取本地文件并输出多维分析结果与展示页面。"""
 
 from __future__ import annotations
 
@@ -9,13 +9,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from comment_analysis.analysis import assign_keywords, build_keyword_report
+from comment_analysis.analysis import assign_keywords, assign_sentiment, build_analysis_report
 from comment_analysis.config.settings import settings
 from comment_analysis.models import CommentRecord
+from comment_analysis.visualization import write_analysis_report
 
 
 def _parse_csv_cell(value: str) -> Any:
-    """把 CSV 单元格中的 JSON 字符串还原为结构化数据。"""
+    """将 CSV 中像 JSON 的单元格还原为结构化数据。"""
     text = value.strip()
     if not text:
         return ""
@@ -28,7 +29,7 @@ def _parse_csv_cell(value: str) -> Any:
 
 
 def load_records(input_path: Path) -> list[CommentRecord]:
-    """从 JSON 或 CSV 文件中读取评论列表。"""
+    """从 JSON 或 CSV 文件中读取评论数据。"""
     suffix = input_path.suffix.lower()
     if suffix == ".json":
         payload = json.loads(input_path.read_text(encoding="utf-8"))
@@ -39,19 +40,18 @@ def load_records(input_path: Path) -> list[CommentRecord]:
     if suffix == ".csv":
         with input_path.open("r", encoding="utf-8-sig", newline="") as file:
             rows = list(csv.DictReader(file))
-        parsed_rows = []
-        for row in rows:
-            parsed_row = {key: _parse_csv_cell(value) for key, value in row.items()}
-            parsed_rows.append(parsed_row)
-        return [CommentRecord.from_dict(item) for item in parsed_rows]
+        return [
+            CommentRecord.from_dict({key: _parse_csv_cell(value) for key, value in row.items()})
+            for row in rows
+        ]
 
     raise ValueError(f"不支持的输入格式：{input_path.suffix}")
 
 
 def _build_output_path(output_dir: Path, input_path: Path) -> Path:
-    """生成分析结果输出路径。"""
+    """生成 JSON 报告的输出路径。"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return output_dir / f"{input_path.stem}_keywords_{timestamp}.json"
+    return output_dir / f"{input_path.stem}_analysis_{timestamp}.json"
 
 
 def run_keyword_analysis(
@@ -60,31 +60,36 @@ def run_keyword_analysis(
     top_n: int = 20,
     per_record_top_n: int = 5,
 ) -> dict[str, object]:
-    """执行关键词统计并把结果保存为 JSON 文件。"""
+    """执行关键词、情感和多维统计分析。"""
     target_dir = output_dir or settings.results_dir
     records = load_records(input_path)
     records_with_keywords = assign_keywords(records, top_n=per_record_top_n)
-    report = build_keyword_report(records_with_keywords, top_n=top_n)
+    enriched_records = assign_sentiment(records_with_keywords)
+    report = build_analysis_report(enriched_records, top_n=top_n)
 
     output_path = _build_output_path(target_dir, input_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    report_path = write_analysis_report(report, target_dir, output_path.stem)
 
     return {
         "input_path": input_path,
         "output_path": output_path,
+        "report_path": report_path,
         "total_records": report["total_records"],
         "unique_keywords": report["unique_keywords"],
         "top_keywords": report["top_keywords"],
+        "daily_trend": report["daily_trend"],
+        "platform_distribution": report["platform_distribution"],
+        "sentiment_distribution": report["sentiment_distribution"],
+        "platform_sentiment_breakdown": report["platform_sentiment_breakdown"],
     }
 
 
 def main() -> None:
-    """解析命令行参数并执行关键词统计。"""
-    parser = argparse.ArgumentParser(description="读取本地评论文件并执行关键词统计")
+    """解析命令行参数并运行分析流程。"""
+    parser = argparse.ArgumentParser(description="读取本地评论文件并执行多维分析")
     parser.add_argument("input_path", help="待分析的 JSON 或 CSV 文件路径")
     parser.add_argument("--top-n", type=int, default=20, help="输出前多少个高频关键词")
     parser.add_argument(
@@ -108,11 +113,12 @@ def main() -> None:
         per_record_top_n=args.per_record_top_n,
     )
 
-    print("关键词统计完成")
+    print("分析完成")
     print(f"输入文件：{result['input_path']}")
     print(f"评论数量：{result['total_records']}")
     print(f"关键词种类：{result['unique_keywords']}")
-    print(f"输出文件：{result['output_path']}")
+    print(f"JSON 报告：{result['output_path']}")
+    print(f"HTML 仪表盘：{result['report_path']}")
 
 
 if __name__ == "__main__":

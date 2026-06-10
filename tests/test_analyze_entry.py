@@ -48,6 +48,11 @@ class AnalyzeEntryTest(unittest.TestCase):
             report = json.loads(Path(result["output_path"]).read_text(encoding="utf-8"))
             self.assertEqual(report["total_records"], 2)
             self.assertEqual(report["top_keywords"][0]["keyword"], "iran")
+            self.assertTrue(Path(result["report_path"]).exists())
+
+            html_report = Path(result["report_path"]).read_text(encoding="utf-8")
+            self.assertIn("评论分析结果报告", html_report)
+            self.assertIn("时间趋势", html_report)
 
     def test_run_keyword_analysis_reads_csv_and_writes_report(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -60,3 +65,4 @@ class AnalyzeEntryTest(unittest.TestCase):
             report = json.loads(Path(result["output_path"]).read_text(encoding="utf-8"))
             self.assertEqual(report["total_records"], 2)
             self.assertEqual(report["top_keywords"][0]["keyword"], "iran")
+            self.assertTrue(Path(result["report_path"]).exists())

@@ -1,5 +1,9 @@
-"""来源适配模块入口：集中放置各个具体数据源的爬虫实现。"""
+"""数据源适配器入口。"""
 
 from .hackernews import HackerNewsCommentCrawler
+from .stackexchange import StackExchangeCommentCrawler
 
-__all__ = ["HackerNewsCommentCrawler"]
+__all__ = [
+    "HackerNewsCommentCrawler",
+    "StackExchangeCommentCrawler",
+]

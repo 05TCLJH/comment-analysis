@@ -198,3 +198,33 @@ python -m unittest tests.test_storage_local tests.test_run_all tests.test_clean_
 - 增加图表输出
 - 增加数据库存储
 - 完善可视化结果展示
+## 结果展示
+
+运行 `comment_analysis.entry.analyze` 后，除了原有的关键词统计 JSON，还会额外生成一个 HTML 报告文件，里面已经包含了：
+
+- 评论总数、关键词种类、平台数量等概览指标
+- 平台分布
+- 时间趋势
+- 情感分布
+- Top 关键词条形图和表格
+
+这样可以先快速看见趋势和分布，再继续扩展更复杂的可视化。
+## 第二个数据源
+
+现在采集入口已经支持第二个真实数据源 `Stack Exchange`，你可以在运行最小流程时通过 `--source` 切换：
+
+```powershell
+python -m comment_analysis.entry.run_all --keyword 美以伊战争 --limit 5 --source stackexchange
+```
+
+也可以把两个真实数据源一起跑起来：
+
+```powershell
+python -m comment_analysis.entry.run_all --keyword 美以伊战争 --limit 5 --source all
+```
+
+可选数据源：
+
+- `hackernews`
+- `stackexchange`
+- `all`

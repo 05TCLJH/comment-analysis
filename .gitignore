@@ -11,6 +11,7 @@ env/
 # IDE 配置
 .idea/
 .vscode/
+.vs/
 
 # 测试与工具缓存
 .pytest_cache/
