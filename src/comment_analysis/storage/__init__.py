@@ -6,7 +6,9 @@ from .repository import (
     JsonFileRepository,
     MemoryRepository,
     build_local_repository,
+    build_repository,
 )
+from .raw import RawFileRepository
 from .sqlite import SqliteCommentRepository
 
 __all__ = [
@@ -14,6 +16,8 @@ __all__ = [
     "CsvFileRepository",
     "JsonFileRepository",
     "MemoryRepository",
+    "RawFileRepository",
     "SqliteCommentRepository",
     "build_local_repository",
+    "build_repository",
 ]
