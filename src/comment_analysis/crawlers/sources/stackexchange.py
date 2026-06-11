@@ -127,12 +127,12 @@ class StackExchangeCommentCrawler(BaseCrawler):
             )
         return parse_items
 
-    def crawl(self) -> list[CommentRecord]:
-        """执行抓取流程并返回评论列表。"""
+    def crawl_with_raw(self) -> tuple[dict[str, Any], list[CommentRecord]]:
+        """执行抓取流程并返回原始响应与评论列表。"""
         search_payload = self._fetch_payload(self._build_search_url())
         question_map = self._extract_question_map(search_payload)
         if not question_map:
-            return []
+            return {"search": search_payload, "comments": {"items": []}}, []
 
         comment_payload = self._fetch_payload(self._build_comments_url(list(question_map.keys())))
         comments = comment_payload.get("items", [])
@@ -141,6 +141,12 @@ class StackExchangeCommentCrawler(BaseCrawler):
 
         valid_comments = [comment for comment in comments if isinstance(comment, dict)]
         crawl_time = datetime.now(timezone.utc)
-        return self.parser.parse_many(
+        records = self.parser.parse_many(
             self._build_parse_items(question_map, valid_comments, crawl_time)
         )
+        return {"search": search_payload, "comments": comment_payload}, records
+
+    def crawl(self) -> list[CommentRecord]:
+        """执行抓取流程并返回评论列表。"""
+        _, records = self.crawl_with_raw()
+        return records
