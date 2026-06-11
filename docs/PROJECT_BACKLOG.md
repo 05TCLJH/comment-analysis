@@ -1,6 +1,6 @@
 # 美以伊战争多源网络评论分析 — 项目待办与模块清单
 
-> 文档版本：2026-06-11（P0 已合并 main · PR #1；P1 双语分析待做）  
+> 文档版本：2026-06-11（P0 已合并 main · PR #1；P1 双语分析已完成 · `feat/p1-bilingual-analysis`）  
 > 策略调整：**先打通完整链路（落盘 → 存储 → 分析 → HTML）**，分析侧实现**中英文双语**（分词 + 词典 + 规则，**不调用大模型**）；**信息源扩展优先级下调**。
 
 ---
@@ -113,14 +113,14 @@ python -m comment_analysis.entry.pipeline --keyword "美以伊战争" --limit 20
 | 情感 | **VADER**（规则 + 社交文本词典）或扩展现有英文词典 | 词典 + 规则 |
 | 不用 | spaCy `trf`、BERT、云 Comprehend、LLM | 本阶段排除 |
 
-### 2.4 与当前实现的差异
+### 2.4 与历史实现的差异（P1 已达成 V1 目标）
 
-| 项目 | 当前 | V1 目标 |
-|------|------|---------|
-| 中文分词 | 正则抽连续汉字 | jieba |
+| 项目 | P0 基线 | V1 现状（P1 后） |
+|------|---------|------------------|
+| 中文分词 | 正则抽连续汉字 | jieba + 停用词表 |
 | 英文分词 | 正则抽单词 | NLTK + 停用词 + 词形归一 |
 | 情感 | 中英混合小词典 + 简单否定 | 中文词典增强 + VADER（英） |
-| 依赖 | 零第三方包 | `jieba`、`nltk`、`vaderSentiment` 等写入 `requirements.txt` |
+| 依赖 | sqlalchemy + dotenv | 另含 `jieba`、`nltk`、`vaderSentiment` |
 
 ### 2.5 建议新增模块
 
@@ -179,7 +179,7 @@ src/comment_analysis/analysis/
 | `CommentRecord`、双源 Parser/Crawler | ✅ |
 | 清洗（去重、乱码、时间统一） | ✅ |
 | JSON / CSV 文件存储 | ✅ |
-| 规则分词 + 词典情感（中英混合正则） | ✅ 待升级为双语管线 |
+| 双语分词（jieba + NLTK）+ 情感（词典 + VADER） | ✅ |
 | `build_analysis_report` + ECharts HTML | ✅ |
 | `run_all`（采集+清洗+文件存储） | ✅ |
 | `analyze`（读文件 → 分析 → HTML） | ✅ |
@@ -194,10 +194,9 @@ src/comment_analysis/analysis/
 
 | 模块 | 现状 |
 |------|------|
-| 双语 jieba / NLTK / VADER | ❌ P1 |
 | `analysis_jobs` 表（分析任务元数据） | ❌ P2 |
 | 结构化全链路日志 | ❌ P2 |
-| README 与本文档完全同步 | ⚠️ 部分 |
+| README 与本文档核心内容同步 | ✅ P1 命令、双语依赖、pipeline 主路径已同步（细节完善见 P2-5） |
 
 ---
 
@@ -213,15 +212,15 @@ src/comment_analysis/analysis/
 | 编排统一 | `FullPipeline` 串联各阶段 | ✅ |
 | 依赖与配置 | `requirements.txt` + `python-dotenv` | ✅ |
 
-### 5.2 P1 — 双语规则化分析
+### 5.2 P1 — 双语规则化分析（✅ 已完成，2026-06-11）
 
-| 欠缺项 | 说明 |
-|--------|------|
-| 语言分流 | 中英混合评论走对应分词与情感管线 |
-| 中文 jieba | 替代正则抽汉字 |
-| 英文 NLTK + VADER | 替代纯正则 + 小词典 |
-| 分析读库 | 从 SQLite 拉取记录再分析 |
-| 报告标注语言 | HTML/JSON 可展示各语言占比（可选） |
+| 欠缺项 | 说明 | 状态 |
+|--------|------|------|
+| 语言分流 | 中英混合评论走对应分词与情感管线 | ✅ |
+| 中文 jieba | 替代正则抽汉字 | ✅ |
+| 英文 NLTK + VADER | 替代纯正则 + 小词典 | ✅ |
+| 分析读库 | 从 SQLite 拉取记录再分析（P0 已交付，P1 自动受益） | ✅ |
+| 报告标注语言 | HTML/JSON 展示各语言占比；HTML 筛选联动 | ✅ |
 
 ### 5.3 P2 — 体验与工程加固
 
@@ -231,7 +230,7 @@ src/comment_analysis/analysis/
 | 日志 | 全链路 `get_logger` |
 | 报告模板拆分 | `charts.py` 可维护性 |
 | 联网冒烟测试 | 可选 `RUN_LIVE_TESTS=1` |
-| README 与文档同步 | 与本文档一致 |
+| README 与文档同步 | 与本文档一致（P1 核心已同步，P2 可继续细化） |
 
 ### 5.4 P3 — 延后（本阶段不做）
 
@@ -261,17 +260,17 @@ src/comment_analysis/analysis/
 | P0-7 | **依赖与 `.env`** | `requirements.txt`：`sqlalchemy`、`python-dotenv` 等；启动加载 `.env` | `pip install -r requirements.txt` 后可跑 pipeline | ✅ |
 | P0-8 | **分析接库** | `analyze` 支持 `--job-id` 或 `--from-db` 从 SQLite 读 | 不依赖手动找最新 JSON | ✅ |
 
-### 6.2 P1 — 双语分析（分词 + 词典 + 规则，无大模型）
+### 6.2 P1 — 双语分析（分词 + 词典 + 规则，无大模型）（✅ 已完成）
 
-| ID | 模块 | 待办内容 | 验收标准 |
-|----|------|----------|----------|
-| P1-1 | **`analysis/language.py`** | 检测主语言或中英混合策略 | 英/中样本文本分流正确 |
-| P1-2 | **中文 `tokenize_cn.py`** | jieba 分词 + 中文停用词 | 中文评论关键词优于纯正则 |
-| P1-3 | **英文 `tokenize_en.py`** | NLTK 分词、停用词、可选 lemmatize | 英文热词 `war`/`wars` 可归一 |
-| P1-4 | **统一 `keywords.py`** | 按语言调用子管线，保留 `assign_keywords` 接口 | 现有测试可扩展双语用例 |
-| P1-5 | **情感 `sentiment.py`** | 中文：扩展词典+否定；英文：VADER；统一三分类标签 | 英/中 fixture 情感方向合理 |
-| P1-6 | **依赖** | `jieba`、`nltk`、`vaderSentiment`；NLTK 数据包文档化 | 首次运行说明 `nltk.download` 步骤 |
-| P1-7 | **报告** | `report` / HTML 展示语言分布（可选） | JSON 含 `language_distribution` 等字段 |
+| ID | 模块 | 待办内容 | 验收标准 | 状态 |
+|----|------|----------|----------|------|
+| P1-1 | **`analysis/language.py`** | 检测主语言或中英混合策略 | 英/中样本文本分流正确 | ✅ |
+| P1-2 | **中文 `tokenize_cn.py`** | jieba 分词 + 中文停用词 | 中文评论关键词优于纯正则 | ✅ |
+| P1-3 | **英文 `tokenize_en.py`** | NLTK 分词、停用词、可选 lemmatize | 英文热词 `war`/`wars` 可归一 | ✅ |
+| P1-4 | **统一 `keywords.py`** | 按语言调用子管线，保留 `assign_keywords` 接口 | 现有测试可扩展双语用例 | ✅ |
+| P1-5 | **情感 `sentiment.py`** | 中文：扩展词典+否定；英文：VADER；统一三分类标签 | 英/中 fixture 情感方向合理 | ✅ |
+| P1-6 | **依赖** | `jieba`、`nltk`、`vaderSentiment`；NLTK 数据包文档化 | README 首次运行说明 | ✅ |
+| P1-7 | **报告** | `report` / HTML 展示语言分布 | JSON 含全量 `language_distribution`；HTML 按 `currentRecords` 筛选联动 | ✅ |
 
 ### 6.3 P2 — 加固与文档
 
@@ -338,7 +337,7 @@ data/
 | 阶段 | 周期（示意） | 目标 |
 |------|--------------|------|
 | **阶段 1** | ✅ 已完成 | **P0**：pipeline 一键跑通 + SQLite + raw 落盘 + analyze 读库 |
-| **阶段 2** | 1～2 周 | **P1**：jieba + NLTK + VADER 双语管线接入报告与 HTML |
+| **阶段 2** | ✅ 已完成 | **P1**：jieba + NLTK + VADER 双语管线接入报告与 HTML |
 | **阶段 3** | 1 周 | **P2**：测试、日志、文档、HTML 小优化 |
 | **阶段 4** | 按需 | **P3**：扩源、SE key、代理、LLM 等 — **仅链路稳定后** |
 
@@ -348,13 +347,13 @@ data/
 
 当以下检查项**全部满足**时，视为 V1 完整链路达成：
 
-- [x] 一条命令：`pipeline` 完成采集 → raw 落盘 → 清洗 → **SQLite 入库** → 规则化分析 → **HTML 报告**（双语分析待 P1）
-- [x] 现有 **HN + SE 双源** 可真实跑通（43 项 unittest + 联网冒烟）
+- [x] 一条命令：`pipeline` 完成采集 → raw 落盘 → 清洗 → **SQLite 入库** → **双语规则化分析** → **HTML 报告**
+- [x] 现有 **HN + SE 双源** 可真实跑通（61 项 unittest + 联网冒烟）
 - [x] 原始 JSON 可回溯，可离线重跑解析/清洗
 - [x] 分析从 **SQLite 读数**，不强制依赖单个 JSON 文件
-- [ ] 关键词：**jieba（中）+ NLTK（英）**；情感：**词典规则（中）+ VADER（英）**（P1）
+- [x] 关键词：**jieba（中）+ NLTK（英）**；情感：**词典规则（中）+ VADER（英）**
 - [x] **未引入** LLM / transformers 推理
-- [x] `requirements.txt` 与 `.env` 可用；README 与本文档同步（P2 待完善）
+- [x] `requirements.txt` 与 `.env` 可用；README 已补充双语依赖与 pipeline 主路径
 - [ ] （已移除）~~至少 3 个数据源~~ — V1 不要求扩源
 
 ---

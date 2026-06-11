@@ -53,6 +53,11 @@ class AnalyzeEntryTest(unittest.TestCase):
             html_report = Path(result["report_path"]).read_text(encoding="utf-8")
             self.assertIn("评论分析结果报告", html_report)
             self.assertIn("时间趋势", html_report)
+            self.assertIn("语言分布", html_report)
+            # 语言图从 currentRecords 聚合，而非静态 RAW_DATA.language_distribution
+            self.assertIn("languageData[lang]", html_report)
+            self.assertIn("r.detected_language || 'unknown'", html_report)
+            self.assertNotIn("RAW_DATA.language_distribution", html_report)
 
     def test_run_keyword_analysis_reads_csv_and_writes_report(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -66,3 +71,7 @@ class AnalyzeEntryTest(unittest.TestCase):
             self.assertEqual(report["total_records"], 2)
             self.assertEqual(report["top_keywords"][0]["keyword"], "iran")
             self.assertTrue(Path(result["report_path"]).exists())
+
+            html_report = Path(result["report_path"]).read_text(encoding="utf-8")
+            self.assertIn("语言分布", html_report)
+            self.assertIn("languageData[lang]", html_report)
