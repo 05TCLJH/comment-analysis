@@ -41,3 +41,37 @@ class CollectWithRawTest(unittest.TestCase):
         self.assertIn("hits", bundles[0]["raw_payload"])
         self.assertEqual(bundles[0]["records"][0].comment_id, "hn-1")
         fake_crawler.close.assert_called_once()
+
+    def test_collect_with_raw_cn_all(self) -> None:
+        fake_record = CommentRecord(
+            platform="tieba",
+            content="中文评论",
+            source_url="https://tieba.baidu.com/p/1",
+            crawl_time=datetime(2026, 6, 11, 10, 0, 0),
+            comment_id="tb-1",
+        )
+        crawlers = []
+        for platform in ("tieba", "zhihu", "weibo"):
+            crawler = MagicMock()
+            crawler.platform_name = platform
+            crawler.crawl_with_raw.return_value = (
+                {"line_count": 1},
+                [fake_record] if platform == "tieba" else [],
+            )
+            crawlers.append(crawler)
+
+        with patch("comment_analysis.entry.crawl._build_crawlers", return_value=crawlers):
+            bundles = collect_with_raw(
+                keyword="美以伊战争",
+                max_records=5,
+                source="cn_all",
+                job_id="job-cn",
+            )
+
+        self.assertEqual(len(bundles), 3)
+        self.assertEqual(bundles[0]["platform"], "tieba")
+        self.assertEqual(len(bundles[0]["records"]), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 # 项目根目录
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
+# MediaCrawler 子模块默认路径（可通过 MEDIACRAWLER_HOME 覆盖）
+DEFAULT_MEDIACRAWLER_HOME = PROJECT_ROOT / "vendor" / "MediaCrawler"
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 # 数据目录
@@ -40,6 +43,38 @@ class Settings:
     )
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     storage_backend: str = os.getenv("STORAGE_BACKEND", "sqlite")
+
+    # MediaCrawler Bridge
+    mediacrawler_home: Path = Path(
+        os.getenv("MEDIACRAWLER_HOME", str(DEFAULT_MEDIACRAWLER_HOME))
+    ).resolve()
+    mediacrawler_uv: str = os.getenv("MEDIACRAWLER_UV", "uv")
+    mediacrawler_launcher: Path = Path(
+        os.getenv(
+            "MEDIACRAWLER_LAUNCHER",
+            str(PROJECT_ROOT / "scripts" / "run_mediacrawler.py"),
+        )
+    )
+    mediacrawler_login_type: str = os.getenv("MEDIACRAWLER_LOGIN_TYPE", "qrcode")
+    mediacrawler_cookies_tieba: str = os.getenv("MEDIACRAWLER_COOKIES_TIEBA", "")
+    mediacrawler_cookies_zhihu: str = os.getenv("MEDIACRAWLER_COOKIES_ZHIHU", "")
+    mediacrawler_cookies_weibo: str = os.getenv("MEDIACRAWLER_COOKIES_WEIBO", "")
+    mediacrawler_enable_sub_comments: bool = os.getenv(
+        "MEDIACRAWLER_ENABLE_SUB_COMMENTS", "false"
+    ).strip().lower() in {"1", "true", "yes", "y", "t", "on"}
+    mediacrawler_max_sleep_sec: int = int(os.getenv("MEDIACRAWLER_MAX_SLEEP_SEC", "2"))
+    mediacrawler_timeout_seconds: int = int(
+        os.getenv("MEDIACRAWLER_TIMEOUT_SECONDS", "3600")
+    )
+    mediacrawler_max_comments_per_note: int = int(
+        os.getenv("MEDIACRAWLER_MAX_COMMENTS_PER_NOTE", "10")
+    )
+    mediacrawler_enable_cdp_mode: bool = os.getenv(
+        "MEDIACRAWLER_ENABLE_CDP_MODE", "true"
+    ).strip().lower() in {"1", "true", "yes", "y", "t", "on"}
+    mediacrawler_cdp_connect_existing: bool = os.getenv(
+        "MEDIACRAWLER_CDP_CONNECT_EXISTING", "true"
+    ).strip().lower() in {"1", "true", "yes", "y", "t", "on"}
 
     # 常用路径
     project_root: Path = PROJECT_ROOT

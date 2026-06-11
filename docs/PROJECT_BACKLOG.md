@@ -12,7 +12,7 @@
 | **主线** | 完整链路打通 | 一条命令：采集 → 清洗 → 落盘 → SQLite → 双语分析 → HTML 报告 |
 | **存储** | **SQLite 为主** | 默认 `data/comment_analysis.db`；JSON/CSV 作为可选导出 |
 | **分析** | **双语 · 无大模型** | 中文 jieba + 词典规则；英文 NLTK + VADER（规则/词典类） |
-| **数据源** | **维持现有 2 源** | Hacker News + Stack Exchange 已可真实跑通，暂不扩第三源 |
+| **数据源** | **维持现有 2 源 + Bridge 三中文源** | HN/SE API + 贴吧/知乎/微博（MediaCrawler） |
 | **暂缓** | 新平台、LLM API、云 NLP、复杂主题模型 | 链路稳定后再评估 |
 
 ---
@@ -170,7 +170,7 @@ src/comment_analysis/analysis/
 |--------|------|------|
 | Hacker News | Algolia API | ✅ 真实可跑 |
 | Stack Exchange | 官方 API 2.3，`politics` | ✅ 真实可跑 |
-| 采集入口 | `--source hackernews \| stackexchange \| all` | ✅ |
+| 采集入口 | `--source` 支持单源、`cn_all`/`en_all`/`global_all`/`all` | ✅ |
 
 ### 4.2 已实现
 
@@ -287,7 +287,7 @@ src/comment_analysis/analysis/
 | ID | 模块 | 说明 |
 |----|------|------|
 | P3-1 | 第三数据源 | Reddit / GDELT / RSS 等 |
-| P3-2 | 中文社媒源 | 微博、知乎等（合规与采集方式另议） |
+| P3-2 | 中文社媒源 | ✅ 贴吧/知乎/微博（MediaCrawler Bridge + **Git Submodule** `vendor/MediaCrawler`）；新用户需 `git clone --recurse-submodules`；合规与登录运维见 MEDIACRAWLER_BRIDGE.md |
 | P3-3 | SE API Key | 日配额提升，跑批前实施 |
 | P3-4 | HTTP 重试 / PROXY / 限流 | `utils/http.py` |
 | P3-5 | 增量采集 | 按时间/ID 增量 |

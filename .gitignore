@@ -23,7 +23,15 @@ htmlcov/
 *.log
 logs/
 
+# 敏感配置（Cookie、数据库路径等）
+.env
+.env.local
+.env.*.local
+*cookies*.txt
+
+# IDE / 本地工具
+.cursor/
+.codegraph/
+
 # 本地运行产物
-data/processed/
-data/results/
 data/
