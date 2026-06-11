@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import threading
 from pathlib import Path
 
 from comment_analysis.config.settings import DATA_DIR
@@ -10,6 +11,7 @@ from comment_analysis.crawlers.bridge.exceptions import MediaCrawlerError
 
 UV_SYNC_TIMEOUT_SECONDS = 600
 DEPS_MARKER = DATA_DIR / ".mediacrawler_uv_synced"
+_uv_sync_lock = threading.Lock()
 
 
 def resolve_mediacrawler_home(home: Path | str) -> Path:
@@ -79,12 +81,13 @@ def _run_uv_sync(home: Path, uv_executable: str) -> None:
 
 
 def ensure_mediacrawler_deps(home: Path, uv_executable: str) -> None:
-    """首次或 lock 变更时在子模块目录执行 uv sync。"""
+    """首次或 lock 变更时在子模块目录执行 uv sync（并行安全）。"""
     if not (home / "pyproject.toml").is_file():
         return
-    if not _marker_is_stale(home):
-        return
-    _run_uv_sync(home, uv_executable)
+    with _uv_sync_lock:
+        if not _marker_is_stale(home):
+            return
+        _run_uv_sync(home, uv_executable)
 
 
 def ensure_mediacrawler_ready(home: Path | str, uv_executable: str) -> Path:

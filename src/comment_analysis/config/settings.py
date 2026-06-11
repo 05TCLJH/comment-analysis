@@ -75,6 +75,9 @@ class Settings:
     mediacrawler_cdp_connect_existing: bool = os.getenv(
         "MEDIACRAWLER_CDP_CONNECT_EXISTING", "true"
     ).strip().lower() in {"1", "true", "yes", "y", "t", "on"}
+    mediacrawler_parallel_workers: int = int(
+        os.getenv("MEDIACRAWLER_PARALLEL_WORKERS", "3")
+    )
 
     # 常用路径
     project_root: Path = PROJECT_ROOT

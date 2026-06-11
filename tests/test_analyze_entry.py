@@ -51,9 +51,12 @@ class AnalyzeEntryTest(unittest.TestCase):
             self.assertTrue(Path(result["report_path"]).exists())
 
             html_report = Path(result["report_path"]).read_text(encoding="utf-8")
-            self.assertIn("评论分析结果报告", html_report)
+            self.assertIn("舆情监测编辑室", html_report)
+            self.assertIn("chart-wordcloud", html_report)
             self.assertIn("时间趋势", html_report)
             self.assertIn("语言分布", html_report)
+            self.assertIn("insights", report)
+            self.assertIn("word_cloud", report)
             # 语言图从 currentRecords 聚合，而非静态 RAW_DATA.language_distribution
             self.assertIn("languageData[lang]", html_report)
             self.assertIn("r.detected_language || 'unknown'", html_report)

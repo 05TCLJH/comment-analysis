@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from pathlib import Path
+from typing import Any
 
 from comment_analysis.config.settings import settings
 from comment_analysis.crawlers.bridge import CN_PLATFORMS, MediaCrawlerError, resolve_platforms
@@ -124,6 +125,54 @@ def _build_crawlers(
     return crawlers
 
 
+def _crawl_one(crawler: object) -> dict[str, Any]:
+    """执行单个采集器并返回 platform bundle。"""
+    try:
+        raw_payload, records = crawler.crawl_with_raw()
+        return {
+            "platform": crawler.platform_name,
+            "raw_payload": raw_payload,
+            "records": records,
+        }
+    except MediaCrawlerError as exc:
+        if crawler.platform_name not in CN_PLATFORMS:
+            raise
+        return {
+            "platform": crawler.platform_name,
+            "raw_payload": {"error": str(exc)},
+            "records": [],
+        }
+    finally:
+        crawler.close()
+
+
+def _resolve_cn_parallel_workers(cn_count: int) -> int:
+    """解析中文源并行 worker 数；1 表示串行。"""
+    if cn_count <= 1:
+        return 1
+    configured = max(1, settings.mediacrawler_parallel_workers)
+    return min(configured, cn_count)
+
+
+def _collect_cn_bundles(cn_crawlers: list[object]) -> list[dict[str, Any]]:
+    """采集中文源；worker>1 时并行子进程（线程等待 I/O）。"""
+    workers = _resolve_cn_parallel_workers(len(cn_crawlers))
+    if workers <= 1:
+        return [_crawl_one(crawler) for crawler in cn_crawlers]
+
+    bundles_by_platform: dict[str, dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(_crawl_one, crawler): crawler for crawler in cn_crawlers}
+        for future in as_completed(futures):
+            bundle = future.result()
+            bundles_by_platform[str(bundle["platform"])] = bundle
+
+    return [
+        bundles_by_platform[crawler.platform_name]
+        for crawler in cn_crawlers
+    ]
+
+
 def collect_with_raw(
     keyword: str = "美以伊战争",
     max_records: int = 20,
@@ -132,35 +181,26 @@ def collect_with_raw(
 ) -> list[dict[str, object]]:
     """采集并返回各平台的 raw payload 与 CommentRecord 列表。"""
     effective_job_id = job_id or _default_job_id()
-    bundles: list[dict[str, object]] = []
-    for crawler in _build_crawlers(
+    crawlers = _build_crawlers(
         keyword=keyword,
         max_records=max_records,
         source=source,
         job_id=effective_job_id,
-    ):
-        try:
-            raw_payload, records = crawler.crawl_with_raw()
-            bundles.append(
-                {
-                    "platform": crawler.platform_name,
-                    "raw_payload": raw_payload,
-                    "records": records,
-                }
-            )
-        except MediaCrawlerError as exc:
-            if crawler.platform_name not in CN_PLATFORMS:
-                raise
-            bundles.append(
-                {
-                    "platform": crawler.platform_name,
-                    "raw_payload": {"error": str(exc)},
-                    "records": [],
-                }
-            )
-        finally:
-            crawler.close()
-    return bundles
+    )
+
+    cn_crawlers = [c for c in crawlers if c.platform_name in CN_PLATFORMS]
+    en_crawlers = [c for c in crawlers if c.platform_name not in CN_PLATFORMS]
+
+    bundles_by_platform: dict[str, dict[str, Any]] = {}
+
+    for crawler in en_crawlers:
+        bundle = _crawl_one(crawler)
+        bundles_by_platform[str(bundle["platform"])] = bundle
+
+    for bundle in _collect_cn_bundles(cn_crawlers):
+        bundles_by_platform[str(bundle["platform"])] = bundle
+
+    return [bundles_by_platform[crawler.platform_name] for crawler in crawlers]
 
 
 def collect_records(

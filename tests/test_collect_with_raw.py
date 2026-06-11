@@ -72,6 +72,46 @@ class CollectWithRawTest(unittest.TestCase):
         self.assertEqual(bundles[0]["platform"], "tieba")
         self.assertEqual(len(bundles[0]["records"]), 1)
 
+    def test_collect_cn_all_parallel_preserves_platform_order(self) -> None:
+        crawlers = []
+        for platform in ("tieba", "zhihu", "weibo"):
+            crawler = MagicMock()
+            crawler.platform_name = platform
+            crawler.crawl_with_raw.return_value = ({"line_count": 1}, [])
+            crawlers.append(crawler)
+
+        with patch("comment_analysis.entry.crawl._build_crawlers", return_value=crawlers):
+            with patch("comment_analysis.entry.crawl.settings") as mock_settings:
+                mock_settings.mediacrawler_parallel_workers = 3
+                bundles = collect_with_raw(
+                    keyword="美以伊战争",
+                    max_records=5,
+                    source="cn_all",
+                    job_id="job-par",
+                )
+
+        self.assertEqual([b["platform"] for b in bundles], ["tieba", "zhihu", "weibo"])
+        for crawler in crawlers:
+            crawler.crawl_with_raw.assert_called_once()
+            crawler.close.assert_called_once()
+
+    def test_collect_cn_all_serial_when_workers_one(self) -> None:
+        crawler = MagicMock()
+        crawler.platform_name = "tieba"
+        crawler.crawl_with_raw.return_value = ({"line_count": 1}, [])
+
+        with patch("comment_analysis.entry.crawl._build_crawlers", return_value=[crawler]):
+            with patch("comment_analysis.entry.crawl.settings") as mock_settings:
+                mock_settings.mediacrawler_parallel_workers = 1
+                bundles = collect_with_raw(
+                    keyword="美以伊战争",
+                    max_records=5,
+                    source="tieba",
+                )
+
+        self.assertEqual(len(bundles), 1)
+        crawler.crawl_with_raw.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

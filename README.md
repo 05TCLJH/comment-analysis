@@ -1,294 +1,338 @@
-# 美以伊战争多源网络评论分析
+# 美以伊战争 · 多源网络评论分析系统
 
-一个用于采集、清洗、存储和分析网络评论的 Python 项目。  
-当前已具备**完整可运行链路**（P0 + P1）：
+面向「美以伊战争」及相关国际议题，本项目实现了一条**从数据采集到可视化报告**的完整分析流水线：自动抓取中外多个平台的公开评论，清洗入库，进行**不依赖大语言模型**的双语智能分析，并生成交互式 HTML 监测仪表盘，便于观察舆情结构、情感倾向与话题演变。
 
-- Hacker News + Stack Exchange 双源采集
-- **MediaCrawler Bridge**：贴吧、知乎、微博（关键词搜索 + 评论，见 [docs/MEDIACRAWLER_BRIDGE.md](docs/MEDIACRAWLER_BRIDGE.md)）
-- 原始 API 响应落盘（`data/raw/`）
-- 清洗、去重与统一 `CommentRecord` 模型
-- **SQLite 主存储**（默认 `data/comment_analysis.db`）
-- **双语规则化分析**（中文 jieba + 词典；英文 NLTK + VADER，无大模型）
-- 交互式 HTML 仪表盘 + JSON 分析报告
+---
 
-## 当前已实现功能
+## 一、项目要解决什么问题
 
-### 1. 最小真实爬虫
+网络评论分散在不同平台、格式各异、语言混杂。人工汇总成本高，也难以快速回答这些问题：
 
-当前接入了一个真实数据源：
+- 各平台讨论量、情感倾向有何差异？
+- 近期舆论是升温还是降温？消极声音是否集中在高互动评论里？
+- 中文与英文社区分别关注哪些关键词？
 
-- `Hacker News` 公开评论搜索接口
+本项目的思路是：**用一条命令完成「采集 → 存储 → 分析 → 展示」**，把异构数据变成可读、可筛选、可汇报的结构化结论。
 
-对应模块：
+---
 
-- `src/comment_analysis/crawlers/sources/hackernews.py`
-- `src/comment_analysis/parsers/hackernews.py`
+## 二、核心亮点（展示建议）
 
-### 2. 统一评论数据结构
+| 亮点 | 说明 |
+|------|------|
+| **完整闭环** | 一条命令跑通全流程，无需手工拼接中间文件 |
+| **多源融合** | 同时支持国外技术社区（Hacker News、Stack Exchange）与国内社媒（贴吧、知乎、微博） |
+| **双语分析、零大模型成本** | 中文走分词 + 情感词典；英文走分词 + 成熟情感规则库；**全程本地计算，不调用任何大语言模型 API** |
+| **规则化自动洞察** | 系统自动生成「哪个平台消极占比最高」「近 7 日评论量变化」等可读摘要，无需人工写报告 |
+| **舆情监测级可视化** | 深色编辑室风格仪表盘：词云、情感分布、平台交叉、时间趋势、评论明细，支持多维度筛选联动 |
+| **可追溯、可复现** | 原始响应单独落盘，评论写入本地数据库并关联采集任务，支持离线重跑与审计 |
+| **工程质量** | 90+ 单元测试覆盖采集、清洗、分析、可视化与全链路集成 |
 
-项目内统一使用 `CommentRecord` 作为评论标准模型，字段包括：
+---
 
-- 平台
-- 评论内容
-- 来源链接
-- 抓取时间
-- 标题
-- 作者
-- 评论编号
-- 发布时间
-- 点赞数
-- 回复数
-- 关键词
-- 原始数据
+## 三、整体架构设计
 
-对应模块：
-
-- `src/comment_analysis/models/comment_record.py`
-
-### 3. 基础清洗规则
-
-当前已实现这些清洗逻辑：
-
-- 去重
-- 去空值
-- 时间格式统一
-- 乱码修复
-- 无效字符过滤
-- 空白标准化
-
-对应模块：
-
-- `src/comment_analysis/entry/clean.py`
-- `src/comment_analysis/utils/text.py`
-
-### 4. 本地存储
-
-清洗后的评论结果支持保存为：
-
-- `JSON`
-- `CSV`
-
-对应模块：
-
-- `src/comment_analysis/storage/repository.py`
-
-### 5. 双语分析功能
-
-分析模块按语言自动分流，**不调用大模型**：
-
-| 语言 | 分词 | 情感 |
-|------|------|------|
-| 中文 | jieba + 停用词表 | 词典 + 否定词规则 |
-| 英文 | NLTK + 词形归一 | VADER |
-
-支持能力：
-
-- 每条评论关键词提取与情感三分类（积极 / 中性 / 消极）
-- 全量高频词、平台/情感/语言分布、时间趋势
-- JSON 报告含 `language_distribution`；HTML 仪表盘可筛选联动
-
-对应模块：
-
-- `src/comment_analysis/analysis/language.py`
-- `src/comment_analysis/analysis/tokenize_cn.py`
-- `src/comment_analysis/analysis/tokenize_en.py`
-- `src/comment_analysis/analysis/keywords.py`
-- `src/comment_analysis/analysis/sentiment.py`
-- `src/comment_analysis/analysis/report.py`
-- `src/comment_analysis/entry/analyze.py`
-- `src/comment_analysis/entry/pipeline.py`
-
-## 项目目录
+系统采用**分层流水线 + 统一数据模型**架构，各阶段职责清晰、可独立替换：
 
 ```text
-src/comment_analysis/
-├─ analysis/        # 分析模块
-├─ config/          # 配置模块
-├─ crawlers/        # 采集模块
-├─ entry/           # 入口脚本
-├─ models/          # 数据模型
-├─ parsers/         # 解析模块
-├─ pipeline/        # 流程编排
-├─ storage/         # 存储模块
-├─ utils/           # 通用工具
-└─ visualization/   # 可视化模块
+                    ┌─────────────────────────────────┐
+                    │  用户配置：关键词、平台、条数上限   │
+                    └───────────────┬─────────────────┘
+                                    ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  ① 数据采集层                                                      │
+│  · 国外源：公开 API 直接拉取                                        │
+│  · 国内源：通过桥接模块调用 MediaCrawler（浏览器登录态采集）          │
+└───────────────────────────────┬───────────────────────────────────┘
+                                ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  ② 解析与标准化                                                    │
+│  · 各平台原始 JSON → 统一「评论记录」结构（平台、正文、时间、互动数等） │
+└───────────────────────────────┬───────────────────────────────────┘
+                                ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  ③ 清洗与去重                                                      │
+│  · 空内容过滤、乱码修复、时间统一、按「平台 + 评论编号」去重           │
+└───────────────────────────────┬───────────────────────────────────┘
+                                ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  ④ 持久化存储                                                      │
+│  · 原始快照：data/raw/（按平台、任务分文件）                         │
+│  · 结构化库：SQLite 本地数据库（评论表 + 采集任务表）                │
+└───────────────────────────────┬───────────────────────────────────┘
+                                ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  ⑤ 智能分析层（规则化 NLP，无大模型）                                │
+│  · 语言识别 → 中文 / 英文分流                                       │
+│  · 关键词提取、情感三分类、交叉统计、自动洞察生成                    │
+└───────────────────────────────┬───────────────────────────────────┘
+                                ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  ⑥ 可视化输出                                                      │
+│  · JSON 结构化报告 + 交互式 HTML 舆情监测仪表盘                      │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-## 本地环境
+**编排方式**：`pipeline` 入口调用「全流程编排器」，按固定顺序驱动上述六个阶段，并在终端输出任务编号、数据库路径、报告文件位置，方便演示与答辩时快速定位产物。
 
-建议使用 Python 3.10 及以上版本。
+---
 
-### 克隆仓库（含 MediaCrawler 子模块）
+## 四、核心模块设计与实现
 
-使用贴吧 / 知乎 / 微博等中文源时，需拉取 `vendor/MediaCrawler` 子模块：
+以下按「评委能听懂」的方式说明各模块**做什么、怎么做**，目录名仅作对照，答辩时可配合架构图讲解。
+
+### 4.1 数据采集与解析
+
+**做什么**  
+从多个平台拉取与关键词相关的评论，并转成统一结构。
+
+**怎么做**
+
+- **国外社区**：调用平台公开接口，稳定、无需登录。
+- **国内社媒**：通过「桥接模块」对接开源采集工具 MediaCrawler；首次需浏览器登录，后续复用登录态；子模块位于 `vendor/MediaCrawler`（克隆仓库时需 `--recurse-submodules`）。
+- **解析器**：每个平台一份解析逻辑，把字段映射到统一评论模型（正文、作者、发布时间、点赞、回复等）。
+
+**设计要点**  
+采集层与业务层解耦——新增平台只需增加「爬虫 + 解析器」，不影响分析与展示。
+
+### 4.2 统一评论模型
+
+**做什么**  
+全链路只认一种「标准评论对象」，避免各平台字段名不一致导致后续混乱。
+
+**包含信息**  
+平台名称、评论正文、来源链接、抓取时间、标题、作者、发布时间、点赞数、回复数、提取出的关键词、情感标签，以及保留原始字段的扩展区（如情感分数、检测到的语言）。
+
+**设计要点**  
+模型在采集、清洗、入库、分析、导出各阶段复用，保证数据语义一致。
+
+### 4.3 清洗与质量控制
+
+**做什么**  
+提升数据可用性，避免重复和脏数据污染统计。
+
+**规则包括**  
+去重（同一平台同一评论只保留一条）、去空、乱码修复、时间格式统一、无意义空白清理。
+
+### 4.4 存储与任务追溯
+
+**做什么**  
+既保留「原始证据」，又支持「结构化查询」。
+
+**两层存储**
+
+| 层级 | 位置 | 用途 |
+|------|------|------|
+| 原始快照 | `data/raw/` | 保存 API 原始响应，断网后可离线重解析 |
+| 结构化库 | `data/comment_analysis.db` | 评论与采集任务关联存储，支持按任务重跑分析 |
+
+每次采集写入一条**任务记录**（关键词、平台、时间、条数、状态），评论带任务编号，便于答辩时说明「这一轮数据从哪来」。
+
+### 4.5 双语智能分析（核心，无大模型）
+
+**做什么**  
+在本地完成关键词挖掘、情感判断、多维统计和自动文字洞察。
+
+**语言分流**  
+根据文本中中文、英文字符占比，自动判断以中文管线、英文管线或混合处理。
+
+**中文管线**
+
+- 分词：使用成熟中文分词库，配合项目内停用词表过滤「的、了、这个」等无信息词。
+- 情感：基于**领域情感词典**（如「和平、稳定、危险、战争」）+ **否定词规则**（「不支持」反转极性），输出积极 / 中性 / 消极三档，并给出数值分数。
+
+**英文管线**
+
+- 分词：英文分词 + 停用词 + 词形归一（war / wars 合并统计）。
+- 情感：采用面向社交文本的规则情感库，同样映射为三档并输出分数。
+
+**报告层统计**
+
+- 平台分布、情感分布、语言分布、按日趋势  
+- 平台 × 情感、关键词 × 情感交叉  
+- **词云数据**（词频 + 主导情感色）  
+- **规则洞察**（例如：消极占比最高的平台、最高频词及其情感、近 7 日评论量环比、高点赞评论中的消极比例）  
+- **情感分数分布**（直方图 + 分平台均值）
+
+**设计要点**  
+分析逻辑纯 Python、可离线、可解释——答辩时可明确说明「每一条结论对应哪条统计规则」，而非黑盒模型。
+
+### 4.6 可视化与交互展示
+
+**做什么**  
+把 JSON 报告变成评委可直接打开的网页仪表盘。
+
+**设计风格：舆情监测编辑室**
+
+- 深色背景、衬线标题字体、等宽数字，突出「监测大屏」而非普通后台表格。
+- 情感色统一：积极绿、消极红、中性灰、强调琥珀色。
+
+**页面结构（自上而下）**
+
+1. 总览区：任务时间、数据日期范围、评论总量  
+2. **洞察条**：自动生成的 3～4 条文字结论  
+3. 指标卡：平台数、关键词种类、平均点赞/回复、消极占比等  
+4. 分布图：情感 / 平台 / 语言  
+5. **词云**：直观呈现话题热度  
+6. 热词 × 情感堆叠图、情感分数直方图  
+7. 时间趋势、平台情感对比、每日情感走势  
+8. 可筛选评论明细表（平台、日期、关键词、情感）
+
+**交互**  
+修改筛选条件后，图表、词云、洞察与表格**联动刷新**，方便答辩现场演示「只看微博」「只看消极评论」等场景。
+
+---
+
+## 五、支持的数据源
+
+### 国外公开社区
+
+| 平台 | 方式 |
+|------|------|
+| Hacker News | 公开搜索接口 |
+| Stack Exchange（政治板块） | 官方 API |
+
+### 国内社媒（桥接采集）
+
+| 平台 | 说明 |
+|------|------|
+| 贴吧 | 需 MediaCrawler + 浏览器登录 |
+| 知乎 | 同上 |
+| 微博 | 同上 |
+
+### 组合快捷方式
+
+| 命令参数 | 含义 |
+|----------|------|
+| `en_all` / `all` | 仅国外双源（默认 `all` 仍为国外双源） |
+| `cn_all` | 贴吧 + 知乎 + 微博 |
+| `global_all` | 上述五源全部采集 |
+
+Bridge 详细配置见 [docs/MEDIACRAWLER_BRIDGE.md](docs/MEDIACRAWLER_BRIDGE.md)。
+
+---
+
+## 六、快速上手（答辩演示推荐路径）
+
+### 环境要求
+
+- Python 3.10+
+- 建议创建虚拟环境并安装依赖：`pip install -r requirements.txt`
+- 运行前设置：`$env:PYTHONPATH = "src"`（PowerShell）
+
+### 克隆（含国内源子模块）
 
 ```powershell
 git clone --recurse-submodules https://github.com/<your-org>/comment-analysis.git
 cd comment-analysis
-```
-
-若已 clone 主仓但 `vendor/MediaCrawler` 为空：
-
-```powershell
-git submodule update --init --recursive
-```
-
-也可运行 `scripts/bootstrap_mediacrawler.ps1`（Windows）或 `scripts/bootstrap_mediacrawler.sh`（Linux/macOS）完成子模块 init 与 `uv sync`。
-
-**仅使用 Hacker News / Stack Exchange 时**，普通 `git clone` 即可，无需子模块。
-
-创建虚拟环境并安装依赖：
-
-```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-### 双语分析依赖（首次运行必做）
-
-安装 Python 包后，**首次运行前**需预热 NLTK 语料（英文分词与 VADER 依赖）。项目会在运行时自动调用 `ensure_nltk_data()`，也可手动执行：
-
-```powershell
-$env:PYTHONPATH = "src"
-python -c "from comment_analysis.analysis.nltk_data import ensure_nltk_data; ensure_nltk_data(); print('NLTK ready')"
-```
-
-说明：
-
-| 依赖 | 首次运行行为 |
-|------|----------------|
-| **jieba** | 首次分词时自动下载词典到用户缓存目录，无需额外命令 |
-| **nltk** | 需下载 `punkt_tab`、`stopwords`、`wordnet`、`omw-1.4`（上式命令或 pipeline 首次分析时自动完成） |
-| **vaderSentiment** | 纯 Python 包，无额外数据文件 |
-
-若 NLTK 下载超时，可重试上述命令，或配置 pip/网络镜像后再次执行。离线环境需提前在有网机器执行一次，将 `nltk_data` 目录复制到本机。
-
-运行模块命令前，建议先设置源码路径：
-
-```powershell
-$env:PYTHONPATH = "src"
-```
-
-## 配置说明
-
-环境变量示例在 `.env.example` 中，当前可用配置包括：
-
-- `USER_AGENT`
-- `PROXY`
-- `DATABASE_URL`
-- `LOG_LEVEL`
-- `MEDIACRAWLER_HOME` 等 Bridge 配置（默认 `vendor/MediaCrawler` 子模块，见 `.env.example` 与 [docs/MEDIACRAWLER_BRIDGE.md](docs/MEDIACRAWLER_BRIDGE.md)）
-
-## 使用方式
-
-### 0. 推荐：一条命令跑完全链路
-
-```powershell
 copy .env.example .env
+```
+
+仅演示国外双源时，普通 `git clone` 即可，无需子模块。
+
+### 首次运行：英文分析依赖预热
+
+英文分词与情感规则需要下载小型语料包（约数十 MB，一次性）：
+
+```powershell
+$env:PYTHONPATH = "src"
+python -c "from comment_analysis.analysis.nltk_data import ensure_nltk_data; ensure_nltk_data(); print('ready')"
+```
+
+中文分词库首次使用时自动加载词典，无需额外命令。
+
+### 一条命令跑完全链路（推荐演示）
+
+```powershell
 python -m comment_analysis.entry.pipeline --keyword "美以伊战争" --limit 20 --source all
 ```
 
-执行后终端会输出：任务 ID、SQLite 路径、JSON 报告、HTML 仪表盘路径。
+终端会输出：任务编号、数据库路径、JSON 报告、HTML 仪表盘路径。
 
-仅从数据库对最近一次采集任务重新生成报告：
+打开 HTML 即可向评委展示词云、洞察条与筛选联动。
+
+### 对已有数据重新生成报告
 
 ```powershell
 python -m comment_analysis.entry.analyze --from-db --last-job --output-dir data\results
 ```
 
-### 1. 运行采集、清洗、存储最小流程（分步 / 文件存储）
+---
 
-保存为 `JSON`：
+## 七、项目目录（与架构对应）
 
-```powershell
-python -m comment_analysis.entry.run_all --keyword 美以伊战争 --limit 5 --output-format json --output-dir data\processed
+```text
+src/comment_analysis/
+├─ entry/           # 命令行入口（采集、清洗、分析、一键流水线）
+├─ pipeline/        # 全流程编排器
+├─ crawlers/        # 各平台采集与桥接
+├─ parsers/         # 各平台原始数据解析
+├─ models/          # 统一评论与任务模型
+├─ storage/         # 文件存储 + SQLite 数据库访问
+├─ analysis/        # 语言识别、分词、情感、统计、自动洞察
+├─ visualization/   # HTML 仪表盘渲染
+├─ config/          # 配置与环境变量
+└─ utils/           # 文本清洗等通用工具
+
+data/
+├─ raw/             # 原始 API 快照
+├─ comment_analysis.db   # 结构化主库（运行时生成）
+└─ results/         # 分析 JSON + HTML 仪表盘（运行时生成）
 ```
 
-保存为 `CSV`：
+---
 
-```powershell
-python -m comment_analysis.entry.run_all --keyword 美以伊战争 --limit 5 --output-format csv --output-dir data\processed
-```
+## 八、输出产物说明
 
-运行完成后，结果会写到：
+| 产物 | 说明 |
+|------|------|
+| `data/raw/{平台}/{任务编号}.json` | 原始响应，可审计、可离线重跑 |
+| `data/comment_analysis.db` | 评论与任务的结构化存储 |
+| `data/results/*_analysis.json` | 完整统计结果（含词云、洞察、分数汇总） |
+| `data/results/*_dashboard.html` | 交互式舆情监测页面，**建议答辩直接用浏览器打开** |
 
-- `data/processed/`
+`data/` 下运行时文件已加入 `.gitignore`，不提交到 Git。
 
-### 2. 对本地结果做关键词统计
+---
 
-直接分析指定文件：
-
-```powershell
-python -m comment_analysis.entry.analyze data\processed\comments_20260609_221420.json --top-n 10 --per-record-top-n 3 --output-dir data\results
-```
-
-如果你不想手动输入文件名，可以先取最新文件：
-
-```powershell
-$latest = Get-ChildItem data\processed\comments_*.json | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
-python -m comment_analysis.entry.analyze $latest --top-n 10 --per-record-top-n 3 --output-dir data\results
-```
-
-分析结果会写到：
-
-- `data/results/`
-
-## 当前测试
-
-当前已经包含这些测试方向：
-
-- 数据模型测试
-- 解析器测试
-- 真实爬虫测试
-- 清洗规则测试
-- 本地存储测试
-- 总入口测试
-- 关键词分析测试
-- 分析入口测试
-
-运行全部测试：
+## 九、测试与质量保障
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-## 当前输出目录说明
+当前测试覆盖：数据模型、各平台解析、真实样本回归、清洗规则、存储、双语分词与情感、分析报告字段、可视化 HTML 结构、全链路集成等，**共 90 项**，保证重构与演示前可快速验证。
 
-- `data/comment_analysis.db`：SQLite 主库（评论 + 采集任务）
-- `data/raw/`：各平台原始 API JSON
-- `data/processed/`：可选 JSON/CSV 导出
-- `data/results/`：分析 JSON + HTML 仪表盘
+---
 
-`data/` 下运行时产物已加入 `.gitignore`，默认不提交到仓库。
+## 十、配置说明
 
-## 结果展示
+环境变量示例见 `.env.example`，常用项包括：
 
-运行 `pipeline` 或 `analyze` 后，除 JSON 报告外会生成 HTML 仪表盘，包含：
+- 数据库连接地址（默认本地 SQLite 文件）
+- HTTP 代理与用户代理
+- MediaCrawler 路径与 Bridge 相关选项
 
-- 评论总数、平台数、关键词种类、语言种类等概览
-- 情感 / 平台 / **语言**分布（筛选后图表联动更新）
-- 时间趋势、热词榜、平台×情感交叉统计
-- 可筛选评论明细表
+---
 
-## 数据源
+## 十一、文档索引
 
-### 单源
+| 文档 | 内容 |
+|------|------|
+| [docs/MEDIACRAWLER_BRIDGE.md](docs/MEDIACRAWLER_BRIDGE.md) | 国内社媒桥接采集配置与登录 |
+| [docs/PROJECT_BACKLOG.md](docs/PROJECT_BACKLOG.md) | 迭代规划与模块清单 |
+| [docs/MANUAL_PIPELINE_TEST.md](docs/MANUAL_PIPELINE_TEST.md) | 手工联调与验收记录 |
 
-- `hackernews` / `stackexchange`：公开 API
-- `tieba` / `zhihu` / `weibo`：MediaCrawler Bridge（默认 `vendor/MediaCrawler` 子模块 + Chrome 登录）
+---
 
-### 组合别名
+## 十二、后续可扩展方向（当前未实现）
 
-| `--source` | 平台 |
-|------------|------|
-| `cn_all` | 贴吧 + 知乎 + 微博 |
-| `en_all` / `all` | Hacker News + Stack Exchange（**默认 `all` 仍为国外双源**） |
-| `global_all` | 上述五源（2 国外 + 3 国内） |
+- 词频加权（突出真正有区分度的词，而非泛词）
+- 短语与词语共现网络（发现议题簇）
+- 词云点击联动评论筛选
+- 定时调度与 Web 服务化
 
-```powershell
-python -m comment_analysis.entry.pipeline --keyword "美以伊战争" --limit 10 --source cn_all
-python -m comment_analysis.entry.pipeline --keyword "美以伊战争" --limit 20 --source global_all
-```
-
-Bridge 详细说明：[docs/MEDIACRAWLER_BRIDGE.md](docs/MEDIACRAWLER_BRIDGE.md)
+以上均可沿用现有「规则化、可解释、无大模型」技术路线扩展。

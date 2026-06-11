@@ -83,8 +83,10 @@ class RealSamplePipelineTest(unittest.TestCase):
             self.assertEqual(result["platform_distribution"], [{"label": "hackernews", "count": 3}])
             self.assertEqual(len(result["daily_trend"]), 2)
             self.assertTrue(Path(result["report_path"]).exists())
-            self.assertIn("评论分析结果报告", html_report)
+            self.assertIn("舆情监测编辑室", html_report)
+            self.assertIn("chart-wordcloud", html_report)
             self.assertIn("时间趋势", html_report)
+            self.assertEqual(report.get("analysis_engine"), "bilingual-rules-v2")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,11 @@ from datetime import datetime
 from statistics import fmean
 from typing import Any
 
+from comment_analysis.analysis.insights import (
+    build_sentiment_score_summary,
+    build_word_cloud,
+    generate_insights,
+)
 from comment_analysis.analysis.keywords import build_keyword_report
 from comment_analysis.analysis.language import detect_language
 from comment_analysis.models import CommentRecord
@@ -43,6 +48,7 @@ def _normalize_record(record: CommentRecord) -> dict[str, Any]:
         "like_count": record.like_count,
         "reply_count": record.reply_count,
         "sentiment_label": record.sentiment_label or "中性",
+        "sentiment_score": record.raw_data.get("sentiment_score"),
         "keywords": list(record.keywords),
         "detected_language": detected_language,
     }
@@ -144,9 +150,18 @@ def build_analysis_report(records: Iterable[CommentRecord], top_n: int = 20) -> 
         "end": max(date_labels) if date_labels else None,
     }
 
+    word_cloud = build_word_cloud(keyword_report["top_keywords"], keyword_sentiment_breakdown)
+    insights = generate_insights(
+        records_list,
+        top_keywords=keyword_report["top_keywords"],
+        keyword_sentiment_breakdown=keyword_sentiment_breakdown,
+        platform_sentiment_breakdown=platform_sentiment_breakdown,
+    )
+    sentiment_score_summary = build_sentiment_score_summary(records_list)
+
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "analysis_engine": "bilingual-rules-v1",
+        "analysis_engine": "bilingual-rules-v2",
         "total_records": len(records_list),
         "unique_keywords": keyword_report["unique_keywords"],
         "top_keywords": keyword_report["top_keywords"],
@@ -169,4 +184,7 @@ def build_analysis_report(records: Iterable[CommentRecord], top_n: int = 20) -> 
             "platforms": sorted(platform_counter.keys()),
             "sentiments": [item["label"] for item in _to_series(sentiment_counter)],
         },
+        "word_cloud": word_cloud,
+        "insights": insights,
+        "sentiment_score_summary": sentiment_score_summary,
     }
