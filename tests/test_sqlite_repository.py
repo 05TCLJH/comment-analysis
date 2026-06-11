@@ -27,12 +27,18 @@ class SqliteRepositoryTest(unittest.TestCase):
         self.repo.close()
         self.temp_dir.cleanup()
 
-    def _sample_record(self, comment_id: str) -> CommentRecord:
+    def _sample_record(
+        self,
+        comment_id: str,
+        *,
+        platform: str = "hackernews",
+        crawl_time: datetime | None = None,
+    ) -> CommentRecord:
         return CommentRecord(
-            platform="hackernews",
+            platform=platform,
             content=f"comment {comment_id}",
             source_url=f"https://example.com/{comment_id}",
-            crawl_time=datetime(2026, 6, 11, 10, 0, 0),
+            crawl_time=crawl_time or datetime(2026, 6, 11, 10, 0, 0),
             comment_id=comment_id,
         )
 
@@ -61,12 +67,64 @@ class SqliteRepositoryTest(unittest.TestCase):
         rows = self.repo.fetch_comments(job_id="job-a")
         self.assertEqual(len(rows), 3)
 
+    def test_save_many_links_existing_comments_to_new_job(self) -> None:
+        self.repo.save_many(
+            [self._sample_record("c1"), self._sample_record("c2")],
+            job_id="job-a",
+        )
+        inserted = self.repo.save_many(
+            [self._sample_record("c1"), self._sample_record("c3")],
+            job_id="job-b",
+        )
+
+        self.assertEqual(inserted, 1)
+        self.assertEqual(len(self.repo.fetch_comments(job_id="job-b")), 2)
+        self.assertEqual(len(self.repo.fetch_comments(job_id="job-a")), 2)
+        self.assertEqual(len(self.repo.fetch_comments()), 3)
+
     def test_fetch_comments_without_job_returns_all(self) -> None:
         self.repo.save_many([self._sample_record("x1")], job_id="job-x")
         self.repo.save_many([self._sample_record("x2")], job_id="job-y")
         self.assertEqual(len(self.repo.fetch_comments()), 2)
 
-    def test_get_last_crawl_job_id(self) -> None:
+    def test_fetch_comments_filters_by_platform_and_time(self) -> None:
+        self.repo.save_many(
+            [
+                self._sample_record(
+                    "early",
+                    platform="hackernews",
+                    crawl_time=datetime(2026, 6, 10, 8, 0, 0),
+                ),
+                self._sample_record(
+                    "late",
+                    platform="stackexchange",
+                    crawl_time=datetime(2026, 6, 11, 12, 0, 0),
+                ),
+            ],
+            job_id="job-filter",
+        )
+
+        hn_rows = self.repo.fetch_comments(platform="hackernews")
+        self.assertEqual(len(hn_rows), 1)
+        self.assertEqual(hn_rows[0].comment_id, "early")
+
+        ranged = self.repo.fetch_comments(
+            since=datetime(2026, 6, 11, 0, 0, 0),
+            until=datetime(2026, 6, 11, 23, 59, 59),
+        )
+        self.assertEqual(len(ranged), 1)
+        self.assertEqual(ranged[0].comment_id, "late")
+
+    def test_get_last_crawl_job_id_returns_latest_completed(self) -> None:
+        self.repo.create_crawl_job(
+            CrawlJob(
+                job_id="job-running",
+                keyword="k",
+                source="all",
+                status="running",
+                started_at=datetime(2026, 6, 11, 12, 0, 0),
+            )
+        )
         self.repo.create_crawl_job(
             CrawlJob(
                 job_id="job-1",

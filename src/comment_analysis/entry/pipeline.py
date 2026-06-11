@@ -16,13 +16,12 @@ def run_full_pipeline(
     top_n: int = 20,
     per_record_top_n: int = 5,
     results_dir: Path | None = None,
-    storage_backend: str | None = None,
 ) -> dict[str, object]:
     pipeline = FullPipeline(
         keyword=keyword,
         max_records=limit,
         source=source,
-        storage_backend=storage_backend or settings.storage_backend,
+        storage_backend="sqlite",
         results_dir=results_dir,
     )
     try:
@@ -32,7 +31,7 @@ def run_full_pipeline(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="运行评论分析全链路")
+    parser = argparse.ArgumentParser(description="运行评论分析全链路（SQLite 主存储）")
     parser.add_argument("--keyword", default="美以伊战争")
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument(
@@ -43,12 +42,6 @@ def main() -> None:
     parser.add_argument("--top-n", type=int, default=20)
     parser.add_argument("--per-record-top-n", type=int, default=5)
     parser.add_argument("--output-dir", default="", help="结果目录，默认 data/results")
-    parser.add_argument(
-        "--storage-backend",
-        default="",
-        choices=("sqlite", "json", "csv"),
-        help="存储后端，默认 sqlite",
-    )
     args = parser.parse_args()
 
     results_dir = Path(args.output_dir).resolve() if args.output_dir else None
@@ -59,7 +52,6 @@ def main() -> None:
         top_n=args.top_n,
         per_record_top_n=args.per_record_top_n,
         results_dir=results_dir,
-        storage_backend=args.storage_backend or None,
     )
 
     print("全链路执行完成")

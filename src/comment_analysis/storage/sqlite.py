@@ -1,8 +1,9 @@
-"""SQLite 主存储：评论表 + 采集任务表。"""
+"""SQLite 主存储：评论表 + 采集任务表 + 任务评论关联表。"""
 
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Iterable
 
 from sqlalchemy import (
@@ -12,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    and_,
     create_engine,
     select,
 )
@@ -60,6 +62,20 @@ class CommentRow(Base):
     raw_data_json = Column(Text, default="{}")
 
 
+class CrawlJobCommentRow(Base):
+    """任务与评论的多对多关联：重复评论仍计入本次采集任务。"""
+
+    __tablename__ = "crawl_job_comments"
+    __table_args__ = (
+        UniqueConstraint("job_id", "platform", "comment_id", name="uq_job_platform_comment"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(String(64), nullable=False, index=True)
+    platform = Column(String(64), nullable=False)
+    comment_id = Column(String(128), nullable=False)
+
+
 class SqliteCommentRepository:
     def __init__(self, database_url: str) -> None:
         self.engine = create_engine(database_url, future=True)
@@ -92,7 +108,10 @@ class SqliteCommentRepository:
     def get_last_crawl_job_id(self) -> str | None:
         with self._Session() as session:
             row = session.execute(
-                select(CrawlJobRow.job_id).order_by(CrawlJobRow.started_at.desc()).limit(1)
+                select(CrawlJobRow.job_id)
+                .where(CrawlJobRow.status == "completed")
+                .order_by(CrawlJobRow.finished_at.desc(), CrawlJobRow.started_at.desc())
+                .limit(1)
             ).scalar_one_or_none()
             return row
 
@@ -107,24 +126,69 @@ class SqliteCommentRepository:
             for record in records:
                 if not record.comment_id:
                     continue
-                exists = session.execute(
+
+                existing_id = session.execute(
                     select(CommentRow.id).where(
                         CommentRow.platform == record.platform,
                         CommentRow.comment_id == record.comment_id,
                     )
                 ).scalar_one_or_none()
-                if exists is not None:
-                    continue
-                session.add(self._to_row(record, job_id))
-                inserted += 1
+
+                if existing_id is None:
+                    session.add(self._to_row(record, job_id=None))
+                    inserted += 1
+
+                if job_id:
+                    link_exists = session.execute(
+                        select(CrawlJobCommentRow.id).where(
+                            CrawlJobCommentRow.job_id == job_id,
+                            CrawlJobCommentRow.platform == record.platform,
+                            CrawlJobCommentRow.comment_id == record.comment_id,
+                        )
+                    ).scalar_one_or_none()
+                    if link_exists is None:
+                        session.add(
+                            CrawlJobCommentRow(
+                                job_id=job_id,
+                                platform=record.platform,
+                                comment_id=record.comment_id,
+                            )
+                        )
+
             session.commit()
         return inserted
 
-    def fetch_comments(self, *, job_id: str | None = None) -> list[CommentRecord]:
+    def fetch_comments(
+        self,
+        *,
+        job_id: str | None = None,
+        platform: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[CommentRecord]:
         with self._Session() as session:
-            stmt = select(CommentRow)
             if job_id:
-                stmt = stmt.where(CommentRow.job_id == job_id)
+                stmt = (
+                    select(CommentRow)
+                    .join(
+                        CrawlJobCommentRow,
+                        and_(
+                            CommentRow.platform == CrawlJobCommentRow.platform,
+                            CommentRow.comment_id == CrawlJobCommentRow.comment_id,
+                        ),
+                    )
+                    .where(CrawlJobCommentRow.job_id == job_id)
+                )
+            else:
+                stmt = select(CommentRow)
+
+            if platform:
+                stmt = stmt.where(CommentRow.platform == platform.strip().lower())
+            if since is not None:
+                stmt = stmt.where(CommentRow.crawl_time >= since)
+            if until is not None:
+                stmt = stmt.where(CommentRow.crawl_time <= until)
+
             rows = session.execute(stmt).scalars().all()
             return [self._from_row(row) for row in rows]
 

@@ -9,6 +9,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from sqlalchemy import select
+
 
 ROOT = Path(__file__).resolve().parents[1] / "src"
 if str(ROOT) not in sys.path:
@@ -16,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from comment_analysis.models import CommentRecord
 from comment_analysis.pipeline.orchestrator import FullPipeline
+from comment_analysis.storage.sqlite import CrawlJobRow, SqliteCommentRepository
 
 
 class FullPipelineTest(unittest.TestCase):
@@ -56,3 +59,39 @@ class FullPipelineTest(unittest.TestCase):
             self.assertTrue(Path(result["report_json_path"]).exists())
             self.assertTrue(Path(result["report_html_path"]).exists())
             pipeline.close()
+
+    def test_run_marks_job_failed_on_error(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_url = f"sqlite:///{(temp_path / 'fail.db').as_posix()}"
+            pipeline = FullPipeline(
+                keyword="test",
+                max_records=5,
+                source="hackernews",
+                database_url=db_url,
+                raw_dir=temp_path / "raw",
+                results_dir=temp_path / "results",
+            )
+            with patch(
+                "comment_analysis.pipeline.orchestrator.collect_with_raw",
+                side_effect=RuntimeError("crawl failed"),
+            ):
+                with self.assertRaises(RuntimeError):
+                    pipeline.run(top_n=5)
+
+            repo = SqliteCommentRepository(db_url)
+            with repo._Session() as session:
+                status = session.execute(select(CrawlJobRow.status)).scalars().all()
+            self.assertEqual(status, ["failed"])
+            self.assertIsNone(repo.get_last_crawl_job_id())
+            repo.close()
+            pipeline.close()
+
+    def test_rejects_non_sqlite_backend(self) -> None:
+        with self.assertRaises(ValueError):
+            FullPipeline(
+                keyword="test",
+                max_records=5,
+                source="hackernews",
+                storage_backend="json",
+            )

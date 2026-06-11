@@ -49,15 +49,21 @@ class FullPipeline:
         results_dir: Path | None = None,
         storage_backend: str = "sqlite",
     ) -> None:
+        normalized_backend = storage_backend.strip().lower()
+        if normalized_backend != "sqlite":
+            raise ValueError(
+                f"FullPipeline 仅支持 sqlite 存储后端，当前为：{storage_backend}"
+            )
+
         self.keyword = keyword
         self.max_records = max_records
         self.source = source
         self.database_url = database_url or settings.database_url
         self.raw_dir = raw_dir or settings.raw_dir
         self.results_dir = results_dir or settings.results_dir
-        self.storage_backend = storage_backend
+        self.storage_backend = normalized_backend
         self._repo = build_repository(
-            backend=storage_backend,
+            backend=self.storage_backend,
             database_url=self.database_url,
         )
         self._raw_repo = RawFileRepository(self.raw_dir)
@@ -74,69 +80,84 @@ class FullPipeline:
             started_at=started_at,
             params={"limit": self.max_records},
         )
-        if hasattr(self._repo, "create_crawl_job"):
-            self._repo.create_crawl_job(job)
 
-        bundles = collect_with_raw(
-            keyword=self.keyword,
-            max_records=self.max_records,
-            source=self.source,
-        )
+        try:
+            if hasattr(self._repo, "create_crawl_job"):
+                self._repo.create_crawl_job(job)
 
-        raw_count = 0
-        all_records = []
-        for bundle in bundles:
-            platform = str(bundle["platform"])
-            self._raw_repo.save_payload(
-                platform=platform,
-                job_id=job_id,
-                payload=dict(bundle["raw_payload"]),
+            bundles = collect_with_raw(
+                keyword=self.keyword,
+                max_records=self.max_records,
+                source=self.source,
             )
-            records = bundle["records"]
-            raw_count += len(records)
-            all_records.extend(records)
 
-        cleaned = clean_records(all_records)
-        inserted = self._repo.save_many(cleaned, job_id=job_id)
+            raw_count = 0
+            all_records = []
+            for bundle in bundles:
+                platform = str(bundle["platform"])
+                self._raw_repo.save_payload(
+                    platform=platform,
+                    job_id=job_id,
+                    payload=dict(bundle["raw_payload"]),
+                )
+                records = bundle["records"]
+                raw_count += len(records)
+                all_records.extend(records)
 
-        enriched = assign_sentiment(assign_keywords(cleaned, top_n=per_record_top_n))
-        report = build_analysis_report(enriched, top_n=top_n)
+            cleaned = clean_records(all_records)
+            inserted = self._repo.save_many(cleaned, job_id=job_id)
 
-        self.results_dir.mkdir(parents=True, exist_ok=True)
-        report_json_path = self.results_dir / f"job_{job_id}_analysis.json"
-        report_json_path.write_text(
-            json.dumps(report, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        report_html_path = write_analysis_report(
-            report,
-            self.results_dir,
-            report_json_path.stem,
-        )
+            enriched = assign_sentiment(assign_keywords(cleaned, top_n=per_record_top_n))
+            report = build_analysis_report(enriched, top_n=top_n)
 
-        finished_job = CrawlJob(
-            job_id=job_id,
-            keyword=self.keyword,
-            source=self.source,
-            status="completed",
-            started_at=started_at,
-            finished_at=datetime.now(),
-            raw_count=raw_count,
-            cleaned_count=len(cleaned),
-            params=job.params,
-        )
-        if hasattr(self._repo, "update_crawl_job"):
-            self._repo.update_crawl_job(finished_job)
+            self.results_dir.mkdir(parents=True, exist_ok=True)
+            report_json_path = self.results_dir / f"job_{job_id}_analysis.json"
+            report_json_path.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            report_html_path = write_analysis_report(
+                report,
+                self.results_dir,
+                report_json_path.stem,
+            )
 
-        return {
-            "job_id": job_id,
-            "database_url": self.database_url,
-            "raw_count": raw_count,
-            "cleaned_count": len(cleaned),
-            "inserted_count": inserted,
-            "report_json_path": report_json_path,
-            "report_html_path": report_html_path,
-        }
+            finished_job = CrawlJob(
+                job_id=job_id,
+                keyword=self.keyword,
+                source=self.source,
+                status="completed",
+                started_at=started_at,
+                finished_at=datetime.now(),
+                raw_count=raw_count,
+                cleaned_count=len(cleaned),
+                params=job.params,
+            )
+            if hasattr(self._repo, "update_crawl_job"):
+                self._repo.update_crawl_job(finished_job)
+
+            return {
+                "job_id": job_id,
+                "database_url": self.database_url,
+                "raw_count": raw_count,
+                "cleaned_count": len(cleaned),
+                "inserted_count": inserted,
+                "report_json_path": report_json_path,
+                "report_html_path": report_html_path,
+            }
+        except Exception:
+            failed_job = CrawlJob(
+                job_id=job_id,
+                keyword=self.keyword,
+                source=self.source,
+                status="failed",
+                started_at=started_at,
+                finished_at=datetime.now(),
+                params=job.params,
+            )
+            if hasattr(self._repo, "update_crawl_job"):
+                self._repo.update_crawl_job(failed_job)
+            raise
 
     def close(self) -> None:
         if hasattr(self._repo, "close"):
