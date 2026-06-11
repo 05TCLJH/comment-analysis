@@ -144,11 +144,13 @@ _TEMPLATE = '''<!DOCTYPE html>
     <div class="stat-card"><div class="value" id="stat-keywords">0</div><div class="label">关键词种类</div></div>
     <div class="stat-card"><div class="value" id="stat-avg-likes">0</div><div class="label">平均点赞</div></div>
     <div class="stat-card"><div class="value" id="stat-avg-replies">0</div><div class="label">平均回复</div></div>
+    <div class="stat-card"><div class="value" id="stat-languages">0</div><div class="label">语言种类</div></div>
   </div>
 
   <div class="charts-grid">
     <div class="chart-card"><div class="title">情感分布</div><div id="chart-sentiment" class="chart"></div></div>
     <div class="chart-card"><div class="title">平台分布</div><div id="chart-platform" class="chart"></div></div>
+    <div class="chart-card"><div class="title">语言分布</div><div id="chart-language" class="chart"></div></div>
     <div class="chart-card full-width"><div class="title">时间趋势</div><div id="chart-trend" class="chart"></div></div>
     <div class="chart-card full-width"><div class="title">热词榜</div><div id="chart-keywords" class="chart"></div></div>
     <div class="chart-card full-width"><div class="title">平台 × 情感 交叉统计</div><div id="chart-platform-sentiment" class="chart"></div></div>
@@ -237,6 +239,8 @@ function updateStats() {
   const replies = currentRecords.map(r => r.reply_count).filter(v => typeof v === 'number');
   document.getElementById('stat-avg-likes').textContent = likes.length ? (likes.reduce((a,b)=>a+b,0)/likes.length).toFixed(1) : '-';
   document.getElementById('stat-avg-replies').textContent = replies.length ? (replies.reduce((a,b)=>a+b,0)/replies.length).toFixed(1) : '-';
+  const langDist = RAW_DATA.language_distribution || [];
+  document.getElementById('stat-languages').textContent = langDist.length;
 }
 
 function makeBarOption(title, data, color) {
@@ -247,6 +251,22 @@ function makeBarOption(title, data, color) {
     yAxis: { type: 'value' },
     series: [{ data: data.map(d => d.count), type: 'bar', itemStyle: { color: color || '#4a69bd' } }]
   };
+}
+
+function renderLanguageChart() {
+  const data = RAW_DATA.language_distribution || [];
+  const el = document.getElementById('chart-language');
+  if (!el) return;
+  const chart = echarts.init(el);
+  const labelMap = { zh: '中文', en: '英文', mixed: '混合', unknown: '未知' };
+  chart.setOption({
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie',
+      radius: ['35%', '65%'],
+      data: data.map(d => ({ name: labelMap[d.label] || d.label, value: d.count }))
+    }]
+  });
 }
 
 function makePieOption(title, data) {
@@ -293,6 +313,7 @@ function updateCharts() {
 
   echarts.init(document.getElementById('chart-sentiment')).setOption(makePieOption('情感分布', sentimentList));
   echarts.init(document.getElementById('chart-platform')).setOption(makePieOption('平台分布', platformList));
+  renderLanguageChart();
   echarts.init(document.getElementById('chart-trend')).setOption(makeBarOption('时间趋势', dailyList, '#6a89cc'));
   echarts.init(document.getElementById('chart-keywords')).setOption(makeBarOption('热词榜', keywordList, '#4a69bd'));
 
@@ -369,7 +390,7 @@ function updateDashboard() {
 initFilters();
 updateDashboard();
 window.addEventListener('resize', () => {
-  ['chart-sentiment','chart-platform','chart-trend','chart-keywords','chart-platform-sentiment','chart-daily-sentiment']
+  ['chart-sentiment','chart-platform','chart-language','chart-trend','chart-keywords','chart-platform-sentiment','chart-daily-sentiment']
     .forEach(id => { const el = document.getElementById(id); if(el) echarts.getInstanceByDom(el)?.resize(); });
 });
 </script>

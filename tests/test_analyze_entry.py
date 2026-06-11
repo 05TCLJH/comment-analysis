@@ -53,6 +53,7 @@ class AnalyzeEntryTest(unittest.TestCase):
             html_report = Path(result["report_path"]).read_text(encoding="utf-8")
             self.assertIn("评论分析结果报告", html_report)
             self.assertIn("时间趋势", html_report)
+            self.assertIn("语言分布", html_report)
 
     def test_run_keyword_analysis_reads_csv_and_writes_report(self) -> None:
         with TemporaryDirectory() as temp_dir:
