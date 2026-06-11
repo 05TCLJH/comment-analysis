@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable
-import re
 
+from comment_analysis.analysis.language import LanguageLabel, detect_language
+from comment_analysis.analysis.tokenize_cn import tokenize_chinese
+from comment_analysis.analysis.tokenize_en import tokenize_english
 from comment_analysis.models import CommentRecord
-
-
-_ENGLISH_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9'-]{1,}")
-_CHINESE_TOKEN_PATTERN = re.compile(r"[\u4e00-\u9fff]{2,}")
 
 _STOP_WORDS = {
     "a",
@@ -81,23 +79,23 @@ def _extract_text_parts(record: CommentRecord) -> list[str]:
 
 
 def tokenize_text(text: str) -> list[str]:
-    """把中英文文本切分成适合统计的词项。"""
+    """按语言分流分词；混合文本合并中英词项并去重保序。"""
+    label = detect_language(text)
     tokens: list[str] = []
+    seen: set[str] = set()
 
-    for token in _ENGLISH_TOKEN_PATTERN.findall(text.lower()):
-        normalized_token = token.strip("-'")
-        if len(normalized_token) < 2:
-            continue
-        if normalized_token in _STOP_WORDS:
-            continue
-        tokens.append(normalized_token)
+    def _extend(items: list[str]) -> None:
+        for item in items:
+            if item not in seen:
+                seen.add(item)
+                tokens.append(item)
 
-    for token in _CHINESE_TOKEN_PATTERN.findall(text):
-        if token in _STOP_WORDS:
-            continue
-        tokens.append(token)
+    if label in (LanguageLabel.ZH, LanguageLabel.MIXED, LanguageLabel.UNKNOWN):
+        _extend(tokenize_chinese(text))
+    if label in (LanguageLabel.EN, LanguageLabel.MIXED, LanguageLabel.UNKNOWN):
+        _extend(tokenize_english(text))
 
-    return tokens
+    return [t for t in tokens if t.lower() not in _STOP_WORDS and t not in _STOP_WORDS]
 
 
 def extract_keywords_from_record(record: CommentRecord, top_n: int = 5) -> list[str]:
