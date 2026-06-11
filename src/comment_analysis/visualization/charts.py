@@ -239,8 +239,8 @@ function updateStats() {
   const replies = currentRecords.map(r => r.reply_count).filter(v => typeof v === 'number');
   document.getElementById('stat-avg-likes').textContent = likes.length ? (likes.reduce((a,b)=>a+b,0)/likes.length).toFixed(1) : '-';
   document.getElementById('stat-avg-replies').textContent = replies.length ? (replies.reduce((a,b)=>a+b,0)/replies.length).toFixed(1) : '-';
-  const langDist = RAW_DATA.language_distribution || [];
-  document.getElementById('stat-languages').textContent = langDist.length;
+  const langSet = new Set(currentRecords.map(r => r.detected_language || 'unknown'));
+  document.getElementById('stat-languages').textContent = langSet.size;
 }
 
 function makeBarOption(title, data, color) {
@@ -253,8 +253,7 @@ function makeBarOption(title, data, color) {
   };
 }
 
-function renderLanguageChart() {
-  const data = RAW_DATA.language_distribution || [];
+function renderLanguageChart(data) {
   const el = document.getElementById('chart-language');
   if (!el) return;
   const chart = echarts.init(el);
@@ -287,6 +286,7 @@ function makePieOption(title, data) {
 function updateCharts() {
   const sentimentData = {};
   const platformData = {};
+  const languageData = {};
   const dailyData = {};
   const keywordData = {};
   const platformSentiment = {};
@@ -296,6 +296,8 @@ function updateCharts() {
     const s = r.sentiment_label || '中性';
     sentimentData[s] = (sentimentData[s] || 0) + 1;
     platformData[r.platform] = (platformData[r.platform] || 0) + 1;
+    const lang = r.detected_language || 'unknown';
+    languageData[lang] = (languageData[lang] || 0) + 1;
     if (r.date_label) { dailyData[r.date_label] = (dailyData[r.date_label] || 0) + 1; }
     (r.keywords || []).forEach(k => { keywordData[k] = (keywordData[k] || 0) + 1; });
     if (!platformSentiment[r.platform]) platformSentiment[r.platform] = {};
@@ -308,12 +310,13 @@ function updateCharts() {
 
   const sentimentList = Object.entries(sentimentData).map(([label, count]) => ({label, count})).sort((a,b)=>b.count-a.count);
   const platformList = Object.entries(platformData).map(([label, count]) => ({label, count})).sort((a,b)=>b.count-a.count);
+  const languageList = Object.entries(languageData).map(([label, count]) => ({label, count})).sort((a,b)=>b.count-a.count);
   const dailyList = Object.entries(dailyData).map(([label, count]) => ({label, count})).sort((a,b)=>a.label.localeCompare(b.label));
   const keywordList = Object.entries(keywordData).map(([label, count]) => ({label, count})).sort((a,b)=>b.count-a.count).slice(0, 30);
 
   echarts.init(document.getElementById('chart-sentiment')).setOption(makePieOption('情感分布', sentimentList));
   echarts.init(document.getElementById('chart-platform')).setOption(makePieOption('平台分布', platformList));
-  renderLanguageChart();
+  renderLanguageChart(languageList);
   echarts.init(document.getElementById('chart-trend')).setOption(makeBarOption('时间趋势', dailyList, '#6a89cc'));
   echarts.init(document.getElementById('chart-keywords')).setOption(makeBarOption('热词榜', keywordList, '#4a69bd'));
 

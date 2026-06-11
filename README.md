@@ -1,13 +1,14 @@
 # 美以伊战争多源网络评论分析
 
 一个用于采集、清洗、存储和分析网络评论的 Python 项目。  
-当前项目已经具备一条最小可运行链路：
+当前已具备**完整可运行链路**（P0 + P1）：
 
-- 单一数据源评论采集
-- 原始数据解析为统一结构
-- 基础清洗规则处理
-- 本地 `JSON` / `CSV` 存储
-- 关键词统计分析
+- Hacker News + Stack Exchange 双源采集
+- 原始 API 响应落盘（`data/raw/`）
+- 清洗、去重与统一 `CommentRecord` 模型
+- **SQLite 主存储**（默认 `data/comment_analysis.db`）
+- **双语规则化分析**（中文 jieba + 词典；英文 NLTK + VADER，无大模型）
+- 交互式 HTML 仪表盘 + JSON 分析报告
 
 ## 当前已实现功能
 
@@ -70,18 +71,31 @@
 
 - `src/comment_analysis/storage/repository.py`
 
-### 5. 基础分析功能
+### 5. 双语分析功能
 
-当前优先实现了关键词统计，支持：
+分析模块按语言自动分流，**不调用大模型**：
 
-- 每条评论关键词提取
-- 全量评论高频词统计
-- 输出关键词统计结果到 `JSON`
+| 语言 | 分词 | 情感 |
+|------|------|------|
+| 中文 | jieba + 停用词表 | 词典 + 否定词规则 |
+| 英文 | NLTK + 词形归一 | VADER |
+
+支持能力：
+
+- 每条评论关键词提取与情感三分类（积极 / 中性 / 消极）
+- 全量高频词、平台/情感/语言分布、时间趋势
+- JSON 报告含 `language_distribution`；HTML 仪表盘可筛选联动
 
 对应模块：
 
+- `src/comment_analysis/analysis/language.py`
+- `src/comment_analysis/analysis/tokenize_cn.py`
+- `src/comment_analysis/analysis/tokenize_en.py`
 - `src/comment_analysis/analysis/keywords.py`
+- `src/comment_analysis/analysis/sentiment.py`
+- `src/comment_analysis/analysis/report.py`
 - `src/comment_analysis/entry/analyze.py`
+- `src/comment_analysis/entry/pipeline.py`
 
 ## 项目目录
 
@@ -111,6 +125,25 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+### 双语分析依赖（首次运行必做）
+
+安装 Python 包后，**首次运行前**需预热 NLTK 语料（英文分词与 VADER 依赖）。项目会在运行时自动调用 `ensure_nltk_data()`，也可手动执行：
+
+```powershell
+$env:PYTHONPATH = "src"
+python -c "from comment_analysis.analysis.nltk_data import ensure_nltk_data; ensure_nltk_data(); print('NLTK ready')"
+```
+
+说明：
+
+| 依赖 | 首次运行行为 |
+|------|----------------|
+| **jieba** | 首次分词时自动下载词典到用户缓存目录，无需额外命令 |
+| **nltk** | 需下载 `punkt_tab`、`stopwords`、`wordnet`、`omw-1.4`（上式命令或 pipeline 首次分析时自动完成） |
+| **vaderSentiment** | 纯 Python 包，无额外数据文件 |
+
+若 NLTK 下载超时，可重试上述命令，或配置 pip/网络镜像后再次执行。离线环境需提前在有网机器执行一次，将 `nltk_data` 目录复制到本机。
+
 运行模块命令前，建议先设置源码路径：
 
 ```powershell
@@ -128,7 +161,22 @@ $env:PYTHONPATH = "src"
 
 ## 使用方式
 
-### 1. 运行采集、清洗、存储最小流程
+### 0. 推荐：一条命令跑完全链路
+
+```powershell
+copy .env.example .env
+python -m comment_analysis.entry.pipeline --keyword "美以伊战争" --limit 20 --source all
+```
+
+执行后终端会输出：任务 ID、SQLite 路径、JSON 报告、HTML 仪表盘路径。
+
+仅从数据库对最近一次采集任务重新生成报告：
+
+```powershell
+python -m comment_analysis.entry.analyze --from-db --last-job --output-dir data\results
+```
+
+### 1. 运行采集、清洗、存储最小流程（分步 / 文件存储）
 
 保存为 `JSON`：
 
@@ -181,37 +229,30 @@ python -m comment_analysis.entry.analyze $latest --top-n 10 --per-record-top-n 3
 运行全部测试：
 
 ```powershell
-python -m unittest tests.test_storage_local tests.test_run_all tests.test_clean_rules tests.test_hackernews_parser tests.test_hackernews_crawler tests.test_comment_record tests.test_keywords_analysis tests.test_analyze_entry
+python -m unittest discover -s tests -v
 ```
 
 ## 当前输出目录说明
 
-- `data/processed/`：清洗后的评论数据
-- `data/results/`：分析结果文件
+- `data/comment_analysis.db`：SQLite 主库（评论 + 采集任务）
+- `data/raw/`：各平台原始 API JSON
+- `data/processed/`：可选 JSON/CSV 导出
+- `data/results/`：分析 JSON + HTML 仪表盘
 
-这两个目录已加入 `.gitignore`，默认不会提交到仓库。
+`data/` 下运行时产物已加入 `.gitignore`，默认不提交到仓库。
 
-## 后续可继续扩展的方向
-
-- 接入第二个真实数据源
-- 补基础情感分析
-- 增加图表输出
-- 增加数据库存储
-- 完善可视化结果展示
 ## 结果展示
 
-运行 `comment_analysis.entry.analyze` 后，除了原有的关键词统计 JSON，还会额外生成一个 HTML 报告文件，里面已经包含了：
+运行 `pipeline` 或 `analyze` 后，除 JSON 报告外会生成 HTML 仪表盘，包含：
 
-- 评论总数、关键词种类、平台数量等概览指标
-- 平台分布
-- 时间趋势
-- 情感分布
-- Top 关键词条形图和表格
+- 评论总数、平台数、关键词种类、语言种类等概览
+- 情感 / 平台 / **语言**分布（筛选后图表联动更新）
+- 时间趋势、热词榜、平台×情感交叉统计
+- 可筛选评论明细表
 
-这样可以先快速看见趋势和分布，再继续扩展更复杂的可视化。
-## 第二个数据源
+## 数据源
 
-现在采集入口已经支持第二个真实数据源 `Stack Exchange`，你可以在运行最小流程时通过 `--source` 切换：
+采集入口支持 `Hacker News` 与 `Stack Exchange`，通过 `--source` 切换：
 
 ```powershell
 python -m comment_analysis.entry.run_all --keyword 美以伊战争 --limit 5 --source stackexchange
