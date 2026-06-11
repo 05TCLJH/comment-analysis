@@ -39,6 +39,7 @@ class Settings:
         f"sqlite:///{(DATA_DIR / 'comment_analysis.db').as_posix()}",
     )
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    storage_backend: str = os.getenv("STORAGE_BACKEND", "sqlite")
 
     # 常用路径
     project_root: Path = PROJECT_ROOT

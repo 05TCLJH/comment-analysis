@@ -134,3 +134,31 @@ def build_local_repository(output_path: Path, output_format: str) -> BaseReposit
     if normalized_format == "csv":
         return CsvFileRepository(output_path)
     raise ValueError(f"不支持的输出格式：{output_format}")
+
+
+def build_repository(
+    *,
+    backend: str = "sqlite",
+    database_url: str | None = None,
+    output_path: Path | None = None,
+    output_format: str = "json",
+) -> BaseRepository:
+    """按后端类型创建存储仓库，默认 SQLite。"""
+    normalized = backend.strip().lower()
+    if normalized == "sqlite":
+        from comment_analysis.config.settings import settings
+        from comment_analysis.storage.sqlite import SqliteCommentRepository
+
+        url = database_url or settings.database_url
+        if not url:
+            raise ValueError("sqlite 后端需要 DATABASE_URL")
+        return SqliteCommentRepository(url)
+    if normalized == "json":
+        if output_path is None:
+            raise ValueError("json 后端需要 output_path")
+        return JsonFileRepository(output_path)
+    if normalized == "csv":
+        if output_path is None:
+            raise ValueError("csv 后端需要 output_path")
+        return CsvFileRepository(output_path)
+    raise ValueError(f"不支持的存储后端：{backend}")
