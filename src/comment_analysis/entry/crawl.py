@@ -73,6 +73,28 @@ def _build_crawlers(keyword: str, max_records: int, source: str) -> list[object]
     raise ValueError(f"不支持的数据源：{source}")
 
 
+def collect_with_raw(
+    keyword: str = "美以伊战争",
+    max_records: int = 20,
+    source: str = "hackernews",
+) -> list[dict[str, object]]:
+    """采集并返回各平台的 raw payload 与 CommentRecord 列表。"""
+    bundles: list[dict[str, object]] = []
+    for crawler in _build_crawlers(keyword=keyword, max_records=max_records, source=source):
+        try:
+            raw_payload, records = crawler.crawl_with_raw()
+            bundles.append(
+                {
+                    "platform": crawler.platform_name,
+                    "raw_payload": raw_payload,
+                    "records": records,
+                }
+            )
+        finally:
+            crawler.close()
+    return bundles
+
+
 def collect_records(
     keyword: str = "美以伊战争",
     max_records: int = 20,
@@ -80,9 +102,6 @@ def collect_records(
 ) -> list[CommentRecord]:
     """运行真实数据源采集流程并返回标准评论列表。"""
     records: list[CommentRecord] = []
-    for crawler in _build_crawlers(keyword=keyword, max_records=max_records, source=source):
-        try:
-            records.extend(list(crawler.crawl()))
-        finally:
-            crawler.close()
+    for bundle in collect_with_raw(keyword=keyword, max_records=max_records, source=source):
+        records.extend(bundle["records"])
     return records

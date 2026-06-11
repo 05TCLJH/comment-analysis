@@ -15,8 +15,13 @@ class BaseRepository(ABC):
     """数据存储仓库基类。"""
 
     @abstractmethod
-    def save_many(self, records: Iterable[CommentRecord]) -> None:
-        """批量保存评论数据。"""
+    def save_many(
+        self,
+        records: Iterable[CommentRecord],
+        *,
+        job_id: str | None = None,
+    ) -> int:
+        """批量保存评论数据，返回新插入条数。"""
         raise NotImplementedError
 
 
@@ -26,8 +31,15 @@ class MemoryRepository(BaseRepository):
     def __init__(self) -> None:
         self.records: list[CommentRecord] = []
 
-    def save_many(self, records: Iterable[CommentRecord]) -> None:
-        self.records.extend(records)
+    def save_many(
+        self,
+        records: Iterable[CommentRecord],
+        *,
+        job_id: str | None = None,
+    ) -> int:
+        items = list(records)
+        self.records.extend(items)
+        return len(items)
 
 
 class JsonFileRepository(BaseRepository):
@@ -36,13 +48,19 @@ class JsonFileRepository(BaseRepository):
     def __init__(self, output_path: Path) -> None:
         self.output_path = output_path
 
-    def save_many(self, records: Iterable[CommentRecord]) -> None:
+    def save_many(
+        self,
+        records: Iterable[CommentRecord],
+        *,
+        job_id: str | None = None,
+    ) -> int:
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         payload = [record.to_dict() for record in records]
         self.output_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        return len(payload)
 
 
 class CsvFileRepository(BaseRepository):
@@ -51,7 +69,12 @@ class CsvFileRepository(BaseRepository):
     def __init__(self, output_path: Path) -> None:
         self.output_path = output_path
 
-    def save_many(self, records: Iterable[CommentRecord]) -> None:
+    def save_many(
+        self,
+        records: Iterable[CommentRecord],
+        *,
+        job_id: str | None = None,
+    ) -> int:
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         payload = [self._serialize_row(record.to_dict()) for record in records]
 
@@ -60,6 +83,7 @@ class CsvFileRepository(BaseRepository):
             writer = csv.DictWriter(file, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(payload)
+        return len(payload)
 
     def _serialize_row(self, row: dict[str, object]) -> dict[str, object]:
         """把复杂字段转换成适合写入 CSV 的字符串。"""
@@ -110,3 +134,31 @@ def build_local_repository(output_path: Path, output_format: str) -> BaseReposit
     if normalized_format == "csv":
         return CsvFileRepository(output_path)
     raise ValueError(f"不支持的输出格式：{output_format}")
+
+
+def build_repository(
+    *,
+    backend: str = "sqlite",
+    database_url: str | None = None,
+    output_path: Path | None = None,
+    output_format: str = "json",
+) -> BaseRepository:
+    """按后端类型创建存储仓库，默认 SQLite。"""
+    normalized = backend.strip().lower()
+    if normalized == "sqlite":
+        from comment_analysis.config.settings import settings
+        from comment_analysis.storage.sqlite import SqliteCommentRepository
+
+        url = database_url or settings.database_url
+        if not url:
+            raise ValueError("sqlite 后端需要 DATABASE_URL")
+        return SqliteCommentRepository(url)
+    if normalized == "json":
+        if output_path is None:
+            raise ValueError("json 后端需要 output_path")
+        return JsonFileRepository(output_path)
+    if normalized == "csv":
+        if output_path is None:
+            raise ValueError("csv 后端需要 output_path")
+        return CsvFileRepository(output_path)
+    raise ValueError(f"不支持的存储后端：{backend}")

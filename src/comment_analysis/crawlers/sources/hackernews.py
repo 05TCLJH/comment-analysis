@@ -85,8 +85,8 @@ class HackerNewsCommentCrawler(BaseCrawler):
             for hit in hits
         ]
 
-    def crawl(self) -> list[CommentRecord]:
-        """执行抓取流程并返回评论对象列表。"""
+    def crawl_with_raw(self) -> tuple[dict[str, Any], list[CommentRecord]]:
+        """执行抓取流程并返回原始响应与评论对象列表。"""
         payload = self._fetch_payload()
         hits = payload.get("hits", [])
         if not isinstance(hits, list):
@@ -94,4 +94,10 @@ class HackerNewsCommentCrawler(BaseCrawler):
 
         valid_hits = [hit for hit in hits if isinstance(hit, dict)]
         crawl_time = datetime.now()
-        return self.parser.parse_many(self._build_parse_items(valid_hits, crawl_time))
+        records = self.parser.parse_many(self._build_parse_items(valid_hits, crawl_time))
+        return payload, records
+
+    def crawl(self) -> list[CommentRecord]:
+        """执行抓取流程并返回评论对象列表。"""
+        _, records = self.crawl_with_raw()
+        return records

@@ -6,9 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 import os
 
+from dotenv import load_dotenv
+
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 # 数据目录
 DATA_DIR = PROJECT_ROOT / "data"
@@ -30,8 +34,12 @@ class Settings:
     # 运行环境变量
     user_agent: str = os.getenv("USER_AGENT", "")
     proxy: str = os.getenv("PROXY", "")
-    database_url: str = os.getenv("DATABASE_URL", "")
+    database_url: str = os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{(DATA_DIR / 'comment_analysis.db').as_posix()}",
+    )
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    storage_backend: str = os.getenv("STORAGE_BACKEND", "sqlite")
 
     # 常用路径
     project_root: Path = PROJECT_ROOT
