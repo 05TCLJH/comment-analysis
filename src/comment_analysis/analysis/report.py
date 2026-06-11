@@ -9,6 +9,7 @@ from statistics import fmean
 from typing import Any
 
 from comment_analysis.analysis.keywords import build_keyword_report
+from comment_analysis.analysis.language import detect_language
 from comment_analysis.models import CommentRecord
 
 
@@ -23,6 +24,11 @@ def _get_date_label(record: CommentRecord) -> str | None:
 def _normalize_record(record: CommentRecord) -> dict[str, Any]:
     """把记录整理成适合展示层使用的普通字典。"""
     date_label = _get_date_label(record)
+    detected_language = record.raw_data.get("detected_language")
+    if not detected_language:
+        detected_language = detect_language(
+            record.content + " " + (record.title or "")
+        ).value
     return {
         "platform": record.platform,
         "content": record.content,
@@ -38,6 +44,7 @@ def _normalize_record(record: CommentRecord) -> dict[str, Any]:
         "reply_count": record.reply_count,
         "sentiment_label": record.sentiment_label or "中性",
         "keywords": list(record.keywords),
+        "detected_language": detected_language,
     }
 
 
@@ -58,6 +65,7 @@ def build_analysis_report(records: Iterable[CommentRecord], top_n: int = 20) -> 
 
     platform_counter: Counter[str] = Counter()
     sentiment_counter: Counter[str] = Counter()
+    language_counter: Counter[str] = Counter()
     daily_counter: Counter[str] = Counter()
     platform_sentiment_counter: dict[str, Counter[str]] = defaultdict(Counter)
     daily_sentiment_counter: dict[str, Counter[str]] = defaultdict(Counter)
@@ -92,7 +100,9 @@ def build_analysis_report(records: Iterable[CommentRecord], top_n: int = 20) -> 
         if record.reply_count is not None:
             reply_values.append(record.reply_count)
 
-        normalized_records.append(_normalize_record(record))
+        normalized = _normalize_record(record)
+        language_counter.update([normalized["detected_language"]])
+        normalized_records.append(normalized)
 
     top_keyword_names = [item["keyword"] for item in keyword_report["top_keywords"]]
 
@@ -136,11 +146,13 @@ def build_analysis_report(records: Iterable[CommentRecord], top_n: int = 20) -> 
 
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "analysis_engine": "bilingual-rules-v1",
         "total_records": len(records_list),
         "unique_keywords": keyword_report["unique_keywords"],
         "top_keywords": keyword_report["top_keywords"],
         "platform_distribution": _to_series(platform_counter),
         "sentiment_distribution": _to_series(sentiment_counter),
+        "language_distribution": _to_series(language_counter),
         "daily_trend": _to_series(daily_counter, sort_by_count=False),
         "platform_sentiment_breakdown": platform_sentiment_breakdown,
         "daily_sentiment_breakdown": daily_sentiment_breakdown,
