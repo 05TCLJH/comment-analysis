@@ -7,11 +7,13 @@ from .repository import (
     MemoryRepository,
     build_local_repository,
 )
+from .sqlite import SqliteCommentRepository
 
 __all__ = [
     "BaseRepository",
     "CsvFileRepository",
     "JsonFileRepository",
     "MemoryRepository",
+    "SqliteCommentRepository",
     "build_local_repository",
 ]
