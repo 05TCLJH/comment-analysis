@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-import re
 
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+from comment_analysis.analysis.language import LanguageLabel, detect_language
+from comment_analysis.analysis.nltk_data import ensure_nltk_data
+from comment_analysis.analysis.tokenize_cn import tokenize_chinese
 from comment_analysis.models import CommentRecord
 
 
@@ -89,7 +93,7 @@ _NEGATION_WORDS = {
     "没有",
 }
 
-_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9'-]{1,}|[\u4e00-\u9fff]{1,}")
+_analyzer: SentimentIntensityAnalyzer | None = None
 
 
 def _collect_text(record: CommentRecord) -> str:
@@ -100,25 +104,27 @@ def _collect_text(record: CommentRecord) -> str:
     return " ".join(part for part in parts if part)
 
 
-def _tokenize(text: str) -> list[str]:
-    """将文本拆成中英文词项。"""
-    return [token.strip().lower() for token in _TOKEN_PATTERN.findall(text) if token.strip()]
+def _get_vader() -> SentimentIntensityAnalyzer:
+    global _analyzer
+    if _analyzer is None:
+        ensure_nltk_data()
+        _analyzer = SentimentIntensityAnalyzer()
+    return _analyzer
 
 
-def classify_sentiment(text: str) -> tuple[str, int]:
-    """对文本做简单词典情感分类，返回标签和分数。"""
-    tokens = _tokenize(text)
+def _classify_chinese(text: str) -> tuple[str, int]:
+    """沿用词典 + 否定词规则（使用 jieba 分词提升命中率）。"""
+    tokens = tokenize_chinese(text)
     score = 0
-
     for index, token in enumerate(tokens):
-        previous_token = tokens[index - 1] if index > 0 else ""
-        reverse = previous_token in _NEGATION_WORDS
-
+        previous = tokens[index - 1] if index > 0 else ""
+        reverse = previous in _NEGATION_WORDS or any(
+            token.startswith(neg) for neg in _NEGATION_WORDS if len(neg) == 1
+        )
         if token in _POSITIVE_WORDS:
             score += -1 if reverse else 1
         elif token in _NEGATIVE_WORDS:
             score += 1 if reverse else -1
-
     if score >= 2:
         return "积极", score
     if score <= -2:
@@ -126,13 +132,42 @@ def classify_sentiment(text: str) -> tuple[str, int]:
     return "中性", score
 
 
+def _classify_english(text: str) -> tuple[str, int]:
+    """VADER compound 分数映射为三分类。"""
+    compound = _get_vader().polarity_scores(text)["compound"]
+    scaled = int(round(compound * 10))
+    if compound >= 0.05:
+        return "积极", scaled
+    if compound <= -0.05:
+        return "消极", scaled
+    return "中性", scaled
+
+
+def classify_sentiment(text: str) -> tuple[str, int]:
+    """按主语言选择情感管线；混合文本优先中文词典（含英文负面词）。"""
+    label = detect_language(text)
+    if label == LanguageLabel.ZH:
+        return _classify_chinese(text)
+    if label == LanguageLabel.EN:
+        return _classify_english(text)
+    if label == LanguageLabel.MIXED:
+        zh_label, zh_score = _classify_chinese(text)
+        en_label, en_score = _classify_english(text)
+        if abs(en_score) > abs(zh_score):
+            return en_label, en_score
+        return zh_label, zh_score
+    return _classify_english(text)
+
+
 def assign_sentiment(records: Iterable[CommentRecord]) -> list[CommentRecord]:
     """为每条评论补充情感标签。"""
     updated_records: list[CommentRecord] = []
     for record in records:
-        label, score = classify_sentiment(_collect_text(record))
+        text = _collect_text(record)
+        sentiment_label, score = classify_sentiment(text)
         raw_data = dict(record.raw_data)
         raw_data["sentiment_score"] = score
+        raw_data["detected_language"] = detect_language(text).value
 
         updated_records.append(
             CommentRecord(
@@ -147,7 +182,7 @@ def assign_sentiment(records: Iterable[CommentRecord]) -> list[CommentRecord]:
                 publish_time=record.publish_time,
                 like_count=record.like_count,
                 reply_count=record.reply_count,
-                sentiment_label=label,
+                sentiment_label=sentiment_label,
                 keywords=record.keywords,
                 raw_data=raw_data,
             )
