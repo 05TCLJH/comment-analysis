@@ -23,6 +23,9 @@ class NltkDataTest(unittest.TestCase):
         self.assertIn("wordnet", NLTK_PACKAGES)
 
     def test_ensure_nltk_data_downloads_missing_packages(self) -> None:
+        import comment_analysis.analysis.nltk_data as nltk_data_module
+
+        nltk_data_module._downloaded = False
         with patch("comment_analysis.analysis.nltk_data.nltk.data.find", side_effect=LookupError):
             with patch("comment_analysis.analysis.nltk_data.nltk.download") as mock_download:
                 ensure_nltk_data()
