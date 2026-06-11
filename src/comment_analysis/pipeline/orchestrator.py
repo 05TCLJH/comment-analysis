@@ -89,6 +89,7 @@ class FullPipeline:
                 keyword=self.keyword,
                 max_records=self.max_records,
                 source=self.source,
+                job_id=job_id,
             )
 
             raw_count = 0

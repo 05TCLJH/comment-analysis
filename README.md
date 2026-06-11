@@ -4,6 +4,7 @@
 当前已具备**完整可运行链路**（P0 + P1）：
 
 - Hacker News + Stack Exchange 双源采集
+- **MediaCrawler Bridge**：贴吧、知乎、微博（关键词搜索 + 评论，见 [docs/MEDIACRAWLER_BRIDGE.md](docs/MEDIACRAWLER_BRIDGE.md)）
 - 原始 API 响应落盘（`data/raw/`）
 - 清洗、去重与统一 `CommentRecord` 模型
 - **SQLite 主存储**（默认 `data/comment_analysis.db`）
@@ -117,6 +118,25 @@ src/comment_analysis/
 
 建议使用 Python 3.10 及以上版本。
 
+### 克隆仓库（含 MediaCrawler 子模块）
+
+使用贴吧 / 知乎 / 微博等中文源时，需拉取 `vendor/MediaCrawler` 子模块：
+
+```powershell
+git clone --recurse-submodules https://github.com/<your-org>/comment-analysis.git
+cd comment-analysis
+```
+
+若已 clone 主仓但 `vendor/MediaCrawler` 为空：
+
+```powershell
+git submodule update --init --recursive
+```
+
+也可运行 `scripts/bootstrap_mediacrawler.ps1`（Windows）或 `scripts/bootstrap_mediacrawler.sh`（Linux/macOS）完成子模块 init 与 `uv sync`。
+
+**仅使用 Hacker News / Stack Exchange 时**，普通 `git clone` 即可，无需子模块。
+
 创建虚拟环境并安装依赖：
 
 ```powershell
@@ -158,6 +178,7 @@ $env:PYTHONPATH = "src"
 - `PROXY`
 - `DATABASE_URL`
 - `LOG_LEVEL`
+- `MEDIACRAWLER_HOME` 等 Bridge 配置（默认 `vendor/MediaCrawler` 子模块，见 `.env.example` 与 [docs/MEDIACRAWLER_BRIDGE.md](docs/MEDIACRAWLER_BRIDGE.md)）
 
 ## 使用方式
 
@@ -252,20 +273,22 @@ python -m unittest discover -s tests -v
 
 ## 数据源
 
-采集入口支持 `Hacker News` 与 `Stack Exchange`，通过 `--source` 切换：
+### 单源
+
+- `hackernews` / `stackexchange`：公开 API
+- `tieba` / `zhihu` / `weibo`：MediaCrawler Bridge（默认 `vendor/MediaCrawler` 子模块 + Chrome 登录）
+
+### 组合别名
+
+| `--source` | 平台 |
+|------------|------|
+| `cn_all` | 贴吧 + 知乎 + 微博 |
+| `en_all` / `all` | Hacker News + Stack Exchange（**默认 `all` 仍为国外双源**） |
+| `global_all` | 上述五源（2 国外 + 3 国内） |
 
 ```powershell
-python -m comment_analysis.entry.run_all --keyword 美以伊战争 --limit 5 --source stackexchange
+python -m comment_analysis.entry.pipeline --keyword "美以伊战争" --limit 10 --source cn_all
+python -m comment_analysis.entry.pipeline --keyword "美以伊战争" --limit 20 --source global_all
 ```
 
-也可以把两个真实数据源一起跑起来：
-
-```powershell
-python -m comment_analysis.entry.run_all --keyword 美以伊战争 --limit 5 --source all
-```
-
-可选数据源：
-
-- `hackernews`
-- `stackexchange`
-- `all`
+Bridge 详细说明：[docs/MEDIACRAWLER_BRIDGE.md](docs/MEDIACRAWLER_BRIDGE.md)

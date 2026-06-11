@@ -72,8 +72,18 @@ def main() -> None:
     parser.add_argument(
         "--source",
         default="hackernews",
-        choices=("hackernews", "stackexchange", "all"),
-        help="采集数据源，支持 hackernews、stackexchange 或 all",
+        choices=(
+            "hackernews",
+            "stackexchange",
+            "tieba",
+            "zhihu",
+            "weibo",
+            "cn_all",
+            "en_all",
+            "global_all",
+            "all",
+        ),
+        help="采集数据源；all/en_all=国外双源，cn_all=国内三源，global_all=六源",
     )
     args = parser.parse_args()
 

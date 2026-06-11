@@ -37,7 +37,18 @@ def main() -> None:
     parser.add_argument(
         "--source",
         default="all",
-        choices=("hackernews", "stackexchange", "all"),
+        choices=(
+            "hackernews",
+            "stackexchange",
+            "tieba",
+            "zhihu",
+            "weibo",
+            "cn_all",
+            "en_all",
+            "global_all",
+            "all",
+        ),
+        help="数据源：单源、cn_all（国内三平台）、en_all/all（国外双平台）、global_all（六源）",
     )
     parser.add_argument("--top-n", type=int, default=20)
     parser.add_argument("--per-record-top-n", type=int, default=5)
