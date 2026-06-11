@@ -12,6 +12,7 @@ from typing import Any
 from comment_analysis.analysis import assign_keywords, assign_sentiment, build_analysis_report
 from comment_analysis.config.settings import settings
 from comment_analysis.models import CommentRecord
+from comment_analysis.storage.sqlite import SqliteCommentRepository
 from comment_analysis.visualization import write_analysis_report
 
 
@@ -54,6 +55,50 @@ def _build_output_path(output_dir: Path, input_path: Path) -> Path:
     return output_dir / f"{input_path.stem}_analysis_{timestamp}.json"
 
 
+def run_analysis_from_db(
+    *,
+    database_url: str,
+    job_id: str | None = None,
+    last_job: bool = False,
+    output_dir: Path | None = None,
+    top_n: int = 20,
+    per_record_top_n: int = 5,
+) -> dict[str, object]:
+    """从 SQLite 读取评论并执行多维分析。"""
+    repo = SqliteCommentRepository(database_url)
+    try:
+        resolved_job_id = job_id
+        if last_job and not resolved_job_id:
+            resolved_job_id = repo.get_last_crawl_job_id()
+        if not resolved_job_id:
+            raise ValueError("需要 --job-id 或 --last-job")
+
+        records = repo.fetch_comments(job_id=resolved_job_id)
+        if not records:
+            raise ValueError(f"job {resolved_job_id} 下没有评论数据")
+
+        records_with_keywords = assign_keywords(records, top_n=per_record_top_n)
+        enriched_records = assign_sentiment(records_with_keywords)
+        report = build_analysis_report(enriched_records, top_n=top_n)
+
+        target_dir = output_dir or settings.results_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = target_dir / f"job_{resolved_job_id}_analysis_{timestamp}.json"
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        report_path = write_analysis_report(report, target_dir, output_path.stem)
+
+        return {
+            "job_id": resolved_job_id,
+            "database_url": database_url,
+            "output_path": output_path,
+            "report_path": report_path,
+            "total_records": report["total_records"],
+        }
+    finally:
+        repo.close()
+
+
 def run_keyword_analysis(
     input_path: Path,
     output_dir: Path | None = None,
@@ -89,8 +134,12 @@ def run_keyword_analysis(
 
 def main() -> None:
     """解析命令行参数并运行分析流程。"""
-    parser = argparse.ArgumentParser(description="读取本地评论文件并执行多维分析")
-    parser.add_argument("input_path", help="待分析的 JSON 或 CSV 文件路径")
+    parser = argparse.ArgumentParser(description="读取本地评论文件或 SQLite 并执行多维分析")
+    parser.add_argument("input_path", nargs="?", default="", help="待分析的 JSON 或 CSV 文件路径")
+    parser.add_argument("--from-db", action="store_true", help="从 SQLite 读取")
+    parser.add_argument("--job-id", default="", help="指定 crawl job_id")
+    parser.add_argument("--last-job", action="store_true", help="使用最近一次 crawl job")
+    parser.add_argument("--database-url", default="", help="覆盖 DATABASE_URL")
     parser.add_argument("--top-n", type=int, default=20, help="输出前多少个高频关键词")
     parser.add_argument(
         "--per-record-top-n",
@@ -106,6 +155,27 @@ def main() -> None:
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir).resolve() if args.output_dir else None
+
+    if args.from_db:
+        database_url = args.database_url or settings.database_url
+        result = run_analysis_from_db(
+            database_url=database_url,
+            job_id=args.job_id or None,
+            last_job=args.last_job,
+            output_dir=output_dir,
+            top_n=args.top_n,
+            per_record_top_n=args.per_record_top_n,
+        )
+        print("分析完成（SQLite）")
+        print(f"任务 ID：{result['job_id']}")
+        print(f"评论数量：{result['total_records']}")
+        print(f"JSON 报告：{result['output_path']}")
+        print(f"HTML 仪表盘：{result['report_path']}")
+        return
+
+    if not args.input_path:
+        parser.error("请提供 input_path，或使用 --from-db")
+
     result = run_keyword_analysis(
         input_path=Path(args.input_path).resolve(),
         output_dir=output_dir,
